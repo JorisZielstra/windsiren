@@ -43,7 +43,7 @@ export type RegionConfig = {
 
 export const REGION_PROVIDERS: Record<string, RegionConfig> = {
   NL: {
-    forecast: "openweathermap",
+    forecast: "open_meteo",
     observations: "knmi",
     tides: "rijkswaterstaat",
     waterTemp: "rijkswaterstaat",
