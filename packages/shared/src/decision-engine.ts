@@ -139,6 +139,22 @@ function evaluateHour(
   return reasons;
 }
 
+// True if a single hour passes every threshold for a given spot + profile.
+// Use when you need per-hour UI dots/highlights; for day-level decisions use
+// evaluateDay which also considers the rideable-hours aggregation rule.
+export function isHourRideable(
+  hour: HourlyForecast,
+  spot: Spot,
+  thresholds: ThresholdProfile,
+): boolean {
+  const allowed =
+    thresholds.directionsAllowed === "spot_default"
+      ? spot.safeWindDirections
+      : thresholds.directionsAllowed;
+  const reasons = evaluateHour(hour, thresholds, allowed);
+  return reasons.every((r) => r.passed);
+}
+
 export function directionInAnyRange(deg: number, ranges: DirectionRange[]): boolean {
   const normalized = ((deg % 360) + 360) % 360;
   return ranges.some((r) => directionInRange(normalized, r));

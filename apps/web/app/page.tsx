@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { dbRowToSpot, fetchTodayVerdict, peakWindMs } from "@/lib/spots";
 import { msToKnots } from "@windsiren/shared";
@@ -43,9 +44,9 @@ export default async function Home() {
           return (
             <li
               key={spot.id}
-              className="flex items-center justify-between rounded-md border border-zinc-200 px-4 py-3 dark:border-zinc-800"
+              className="flex items-center justify-between rounded-md border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
             >
-              <div className="min-w-0 flex-1">
+              <Link href={`/spots/${spot.slug}`} className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{spot.name}</span>
                   {spot.tideSensitive ? (
@@ -63,7 +64,7 @@ export default async function Home() {
                     </>
                   ) : null}
                 </div>
-              </div>
+              </Link>
               <VerdictBadge verdict={verdict} />
             </li>
           );
