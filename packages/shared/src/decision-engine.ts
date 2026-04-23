@@ -5,7 +5,7 @@ import type {
   ThresholdProfile,
   Verdict,
   VerdictReason,
-} from "./types.js";
+} from "./types";
 
 // Pure function. Takes normalized data + user thresholds, returns a verdict.
 // No I/O, no provider knowledge, no global state. Fully testable.

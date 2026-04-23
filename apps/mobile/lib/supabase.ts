@@ -1,0 +1,13 @@
+import { createClient, type TypedSupabaseClient } from "@windsiren/supabase";
+
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+if (!url || !key) {
+  throw new Error(
+    "Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. " +
+      "Check apps/mobile/.env.local.",
+  );
+}
+
+export const supabase: TypedSupabaseClient = createClient(url, key);

@@ -1,4 +1,4 @@
-import type { HourlyForecast, Observation, StationInfo, TidePoint } from "./types.js";
+import type { HourlyForecast, Observation, StationInfo, TidePoint } from "./types";
 
 // The swappable contracts. Every external data source (weather, tide,
 // observations) is an implementation of one of these interfaces. No

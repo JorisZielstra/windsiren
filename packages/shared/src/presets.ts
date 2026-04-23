@@ -1,4 +1,4 @@
-import type { ThresholdProfile } from "./types.js";
+import type { ThresholdProfile } from "./types";
 
 // Knots → m/s: 1 knot ≈ 0.5144 m/s. Values below are stored in SI.
 

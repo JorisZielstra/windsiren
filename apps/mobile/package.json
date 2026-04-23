@@ -6,9 +6,11 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@windsiren/supabase": "workspace:*",
     "expo": "~54.0.33",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
