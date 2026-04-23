@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+.expo/
+.expo-shared/
+out/
+
+# Environment (secrets never in git)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# Legacy Python prototype
+legacy/**/__pycache__/
+legacy/**/*.pyc
+legacy/**/*.pyo
+legacy/**/.pytest_cache/
+legacy/**/*.egg-info/

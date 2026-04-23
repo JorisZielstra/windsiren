@@ -1,0 +1,51 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h1 style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">Favourable weather conditions coming!</h1>
+        <h3 style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;"> Let's hit the water on the following spots:</h3>
+
+        <div class="intro-container">
+            <p style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">
+                Here's your latest report of kitesurfing weather around Amsterdam area. Below are max 5 best wind predictions for each day.
+            </p>
+        </div>
+
+            {% for weather_day in weather_days %}
+            <h4 style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;"> {{weather_day[0]}} </h4>
+            <table style="border: solid grey 1px; border-radius: 7px;">
+                <tr>
+                    <th style="padding: 10px;font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">Kitespot</th>
+                    <th style="padding: 10px;font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">Windspeed</th>
+                    <th style="padding: 10px;font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">Wind gusts</th>
+                </tr>
+                {% for location in weather_day[1] %}
+                <tr>
+                    <td style="text-align: center; padding: 4px;font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">{{ location[0] }}</td>  
+                    <td style="text-align: center; padding: 4px;font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">{{ location[1]|int }}</td>
+                    <td style="text-align: center; padding: 4px;font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">{{ location[2]|int }}</td>  
+                </tr>
+                {% endfor %}
+            </table>
+            {% endfor %}
+        
+        <p style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">
+            If you have ideas for kick-ass features, or you want to unsubscibe drop us a reply.
+        </p>
+
+        <hr>
+
+        <p style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">When is a location included?</p>
+        <ul>
+            <li style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">>17 knots of wind</li>
+            <li style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">Wind towards the beach</li>
+            <li style="font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif; color: darkslategrey;">Location is easily reachable from Amsterdam</li>
+        </ul>
+
+        <div class="footer">
+            {# <<img src="{{ pixel_url }}" height=1 width=1 alt=""/> #}
+        </div>
+    </body>
+</html>

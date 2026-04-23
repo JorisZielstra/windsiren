@@ -1,0 +1,508 @@
+{
+    "kitespots" : [
+        {
+            "Name": "Wijk aan Zee",
+            "Latitude": 52.482630,
+            "Longitude": 4.581581,
+            "Windwindow": {
+                "Minimum": 240,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Paal 17 Texel",
+            "Latitude": 53.081422,
+            "Longitude": 4.736081,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 20
+            }
+        },
+        {
+            "Name": "Waddenzee Texel",
+            "Latitude": 53.167006,
+            "Longitude": 4.874932,
+            "Windwindow": {
+                "Minimum": 0,
+                "Maximum": 160
+            }
+        },
+        {
+            "Name": "Andijk",
+            "Latitude": 52.739615,
+            "Longitude": 5.176999,
+            "Windwindow": {
+                "Minimum": 330,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Schellinkhout",
+            "Latitude": 52.633241,
+            "Longitude": 5.121027,
+            "Windwindow": {
+                "Minimum": 160,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "IJmuiden",
+            "Latitude": 52.456281,
+            "Longitude": 4.559704,
+            "Windwindow": {
+                "Minimum": 170,
+                "Maximum": 335
+            }
+        },
+        {
+            "Name": "Hoekipa Dijk",
+            "Latitude": 52.526670,
+            "Longitude": 5.425336,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 40
+            }
+        },
+        {
+            "Name": "Egmond aan Zee",
+            "Latitude": 52.613790,
+            "Longitude": 4.617561,
+            "Windwindow": {
+                "Minimum": 210,
+                "Maximum": 0
+            }
+        },
+        {
+            "Name": "Zandvoort",
+            "Latitude": 52.383078,
+            "Longitude": 4.528163,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Noordwijk",
+            "Latitude": 52.249958,
+            "Longitude": 4.431479,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 20
+            }
+        },
+        {
+            "Name": "Scheveningen",
+            "Latitude": 52.116652,
+            "Longitude": 4.281880,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 20
+            }
+        },
+        {
+            "Name": "Zandmotor",
+            "Latitude": 52.052664,
+            "Longitude": 4.195335,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Bergen aan Zee",
+            "Latitude": 52.662740,
+            "Longitude": 4.628027,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 340
+            }
+        },
+        {
+            "Name": "Vlieland",
+            "Latitude": 53.304350,
+            "Longitude": 5.042837,
+            "Windwindow": {
+                "Minimum": 270,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Terschelling",
+            "Latitude": 52.482630,
+            "Longitude": 4.581581,
+            "Windwindow": {
+                "Minimum": 90,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "Ameland",
+            "Latitude": 53.459409,
+            "Longitude": 5.758453,
+            "Windwindow": {
+                "Minimum": 90,
+                "Maximum": 290
+            }
+        },
+        {
+            "Name": "Schiermonnikoog",
+            "Latitude": 53.495042,
+            "Longitude": 6.150731,
+            "Windwindow": {
+                "Minimum": 270,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Workum",
+            "Latitude": 52.967780,
+            "Longitude": 5.411370,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 340
+            }
+        },
+        {
+            "Name": "Kornwerderzand",
+            "Latitude": 53.073951,
+            "Longitude": 5.342997,
+            "Windwindow": {
+                "Minimum": 90,
+                "Maximum": 280
+            }
+        },
+        {
+            "Name": "Domburg",
+            "Latitude": 51.555593,
+            "Longitude": 3.469044,
+            "Windwindow": {
+                "Minimum": 250,
+                "Maximum": 50
+            }
+        },
+        {
+            "Name": "Cadzand",
+            "Latitude": 51.373016,
+            "Longitude": 3.371604,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Maasvlakte",
+            "Latitude": 51.924939,
+            "Longitude": 3.981003,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 340
+            }
+        },
+        {
+            "Name": "Rockanje",
+            "Latitude": 51.868278,
+            "Longitude": 4.050756,
+            "Windwindow": {
+                "Minimum": 170,
+                "Maximum": 310
+            }
+        },
+        {
+            "Name": "Medemblik",
+            "Latitude": 52.755110,
+            "Longitude": 5.124056,
+            "Windwindow": {
+                "Minimum": 0,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Borssele",
+            "Latitude": 51.431451,
+            "Longitude": 3.710431,
+            "Windwindow": {
+                "Minimum": 180,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "Baarland",
+            "Latitude": 51.395416,
+            "Longitude": 3.898745,
+            "Windwindow": {
+                "Minimum": 90,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "Vrouwenpolder",
+            "Latitude": 51.623242,
+            "Longitude": 3.679611,
+            "Windwindow": {
+                "Minimum": 320,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Roompot",
+            "Latitude": 51.35152,
+            "Longitude": 2.42151,
+            "Windwindow": {
+                "Minimum": 270,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Neeltje Jans",
+            "Latitude": 51.621170,
+            "Longitude": 3.680201,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 0
+            }
+        },
+        {
+            "Name": "Ouwerkerk",
+            "Latitude": 51.615403,
+            "Longitude": 3.964413,
+            "Windwindow": {
+                "Minimum": 180,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "Grevelingendam",
+            "Latitude": 51.679189,
+            "Longitude": 4.126400,
+            "Windwindow": {
+                "Minimum": 270,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Brouwersdam",
+            "Latitude": 51.760158,
+            "Longitude": 3.847107,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Ouddorp",
+            "Latitude": 51.820715,
+            "Longitude": 3.877829,
+            "Windwindow": {
+                "Minimum": 250,
+                "Maximum": 50
+            }
+        },
+        {
+            "Name": "Oostvoorne",
+            "Latitude": 51.915389,
+            "Longitude": 4.061667,
+            "Windwindow": {
+                "Minimum": 225,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "Hoek van Holland",
+            "Latitude": 51.989444,
+            "Longitude": 4.106209,
+            "Windwindow": {
+                "Minimum": 270,
+                "Maximum": 50
+            }
+        },
+        {
+            "Name": "Wassenaarse Slag",
+            "Latitude": 52.165524,
+            "Longitude": 4.349478,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Katwijk aan Zee",
+            "Latitude": 52.207025,
+            "Longitude": 4.389835,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Langevelderslag",
+            "Latitude": 52.299461,
+            "Longitude": 4.472251,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 20
+            }
+        },
+        {
+            "Name": "Bloemendaal",
+            "Latitude": 52.406538,
+            "Longitude": 4.543369,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Castricum",
+            "Latitude": 52.558922,
+            "Longitude": 4.605349,
+            "Windwindow": {
+                "Minimum": 210,
+                "Maximum": 0
+            }
+        },
+        {
+            "Name": "Schoorl-Camperduin",
+            "Latitude": 52.725958,
+            "Longitude": 4.635466,
+            "Windwindow": {
+                "Minimum": 210,
+                "Maximum": 0
+            }
+        },
+        {
+            "Name": "Callantsoog",
+            "Latitude": 52.836103,
+            "Longitude": 4.689116,
+            "Windwindow": {
+                "Minimum": 210,
+                "Maximum": 0
+            }
+        },
+        {
+            "Name": "Den Helder",
+            "Latitude": 52.898502,
+            "Longitude": 4.712435,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Amstelmeer",
+            "Latitude": 52.887782,
+            "Longitude": 4.912510,
+            "Windwindow": {
+                "Minimum": 170,
+                "Maximum": 335
+            }
+        },
+        {
+            "Name": "Enkhuizen",
+            "Latitude": 52.719885,
+            "Longitude": 5.286052,
+            "Windwindow": {
+                "Minimum": 350,
+                "Maximum": 120
+            }
+        },
+        {
+            "Name": "Edam",
+            "Latitude": 52.540169,
+            "Longitude": 5.052953,
+            "Windwindow": {
+                "Minimum": 30,
+                "Maximum": 170
+            }
+        },
+        {
+            "Name": "Monnickendam",
+            "Latitude": 52.455986,
+            "Longitude": 5.050269,
+            "Windwindow": {
+                "Minimum": 20,
+                "Maximum": 180
+            }
+        },
+        {
+            "Name": "IJburg",
+            "Latitude": 52.354554,
+            "Longitude": 5.016897,
+            "Windwindow": {
+                "Minimum": 40,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Muiderberg",
+            "Latitude": 52.329062,
+            "Longitude": 5.113419,
+            "Windwindow": {
+                "Minimum": 310,
+                "Maximum": 50
+            }
+        },
+        {
+            "Name": "Horst",
+            "Latitude": 52.321639,
+            "Longitude": 5.571444,
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 40
+            }
+        },
+        {
+            "Name": "Lemmer",
+            "Latitude": 52.844944,
+            "Longitude": 5.702472,
+            "Windwindow": {
+                "Minimum": 225,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "Mirns",
+            "Latitude": 52.852847,
+            "Longitude": 5.472805,
+            "Windwindow": {
+                "Minimum": 90,
+                "Maximum": 260
+            }
+        },
+        {
+            "Name": "Hindeloopen",
+            "Latitude": 52.933556,
+            "Longitude": 5.404333,
+            "Windwindow": {
+                "Minimum": 0,
+                "Maximum": 180
+            }
+        },
+        {
+            "Name": "Makkum",
+            "Latitude": 53.053039,
+            "Longitude": 5.377819,
+            "Windwindow": {
+                "Minimum": 0,
+                "Maximum": 180
+            }
+        },
+        {
+            "Name": "Harlingen",
+            "Latitude": 53.166885,
+            "Longitude": 5.416275,
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 340
+            }
+        },
+        {
+            "Name": "Lauwersoog",
+            "Latitude": 53.408444,
+            "Longitude": 6.156833,
+            "Windwindow": {
+                "Minimum": 270,
+                "Maximum": 50
+            }
+        }
+    ]
+}

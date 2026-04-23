@@ -1,0 +1,4 @@
+greenlet==1.1.1
+SQLAlchemy==1.4.25
+pg8000==1.21.2
+cloud_sql_python_connector==0.4.0

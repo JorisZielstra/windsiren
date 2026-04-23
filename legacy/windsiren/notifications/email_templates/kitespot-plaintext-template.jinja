@@ -1,0 +1,13 @@
+Favourable weather conditions coming!
+
+    Here's your latest report of kitesurfing weather around Amsterdam area. Below are max 5 best wind predictions for each day.
+
+{% for weather_day in weather_days %}
+{{weather_day[0]}}
+--------------
+{% for location in weather_day[1] %}
+    {{loop.index + 1}} - {{location[0]}} - Wind speed: {{location[1]|int}} knots - Wind gusts: {{location[2]|int}} knots
+{% endfor %}
+
+{% endfor %}
+If you have ideas for kick-ass features, or you want to unsubscibe drop us a reply.

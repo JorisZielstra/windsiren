@@ -1,0 +1,144 @@
+{
+    "kitespots" : [
+        {
+            "Name": "Wijk aan Zee",
+            "Latitude": 52.482630,
+            "Longitude": 4.581581,
+            "Windgurulink": "https://www.windguru.cz/113",
+            "Windwindow": {
+                "Minimum": 240,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Paal 17 Texel",
+            "Latitude": 53.081422,
+            "Longitude": 4.736081,
+            "Windgurulink": "https://windguru.cz/113678",
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 20
+            }
+        },
+        {
+            "Name": "Waddenzee Texel",
+            "Latitude": 53.167006,
+            "Longitude": 4.874932,
+            "Windgurulink": "https://windguru.cz/49476",
+            "Windwindow": {
+                "Minimum": 0,
+                "Maximum": 160
+            }
+        },
+        {
+            "Name": "Andijk",
+            "Latitude": 52.739615,
+            "Longitude": 5.176999,
+            "Windgurulink": "https://windguru.cz/46947",
+            "Windwindow": {
+                "Minimum": 330,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Schellinkhout",
+            "Latitude": 52.633241,
+            "Longitude": 5.121027,
+            "Windgurulink": "https://windguru.cz/46940",
+            "Windwindow": {
+                "Minimum": 160,
+                "Maximum": 270
+            }
+        },
+        {
+            "Name": "IJmuiden",
+            "Latitude": 52.456281,
+            "Longitude": 4.559704,
+            "Windgurulink": "https://windguru.cz/48299",
+            "Windwindow": {
+                "Minimum": 170,
+                "Maximum": 335
+            }
+        },
+        {
+            "Name": "Hoekipa Dijk",
+            "Latitude": 52.526670,
+            "Longitude": 5.425336,
+            "Windgurulink": "https://windguru.cz/86414",
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 40
+            }
+        },
+        {
+            "Name": "Egmond aan Zee",
+            "Latitude": 52.613790,
+            "Longitude": 4.617561,
+            "Windgurulink": "https://windguru.cz/32161",
+            "Windwindow": {
+                "Minimum": 210,
+                "Maximum": 0
+            }
+        },
+        {
+            "Name": "Zandvoort",
+            "Latitude": 52.383078,
+            "Longitude": 4.528163,
+            "Windgurulink": "https://windguru.cz/19439",
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Noordwijk",
+            "Latitude": 52.249958,
+            "Longitude": 4.431479,
+            "Windgurulink": "https://windguru.cz/575",
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 20
+            }
+        },
+        {
+            "Name": "Workum",
+            "Latitude": 52.967780,
+            "Longitude": 5.411370,
+            "Windgurulink": "https://windguru.cz/48267",
+            "Windwindow": {
+                "Minimum": 200,
+                "Maximum": 340
+            }
+        },
+        {
+            "Name": "Medemblik",
+            "Latitude": 52.755110,
+            "Longitude": 5.124056,
+            "Windgurulink": "https://windguru.cz/48274",
+            "Windwindow": {
+                "Minimum": 0,
+                "Maximum": 90
+            }
+        },
+        {
+            "Name": "Bloemendaal",
+            "Latitude": 52.406538,
+            "Longitude": 4.543369,
+            "Windgurulink": "https://windguru.cz/220844",
+            "Windwindow": {
+                "Minimum": 230,
+                "Maximum": 10
+            }
+        },
+        {
+            "Name": "Monnickendam",
+            "Latitude": 52.455986,
+            "Longitude": 5.050269,
+            "Windgurulink": "https://windguru.cz/132516",
+            "Windwindow": {
+                "Minimum": 20,
+                "Maximum": 180
+            }
+        }
+    ]
+}
