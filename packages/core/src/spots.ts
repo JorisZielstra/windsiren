@@ -2,12 +2,13 @@
 // and @windsiren/supabase to @windsiren/shared's decision engine. No React,
 // no DOM/RN APIs — consumable from server and client alike.
 
-import { OpenMeteoForecastSource } from "@windsiren/providers";
+import { KnmiObservationSource, OpenMeteoForecastSource } from "@windsiren/providers";
 import {
   evaluateDay,
   INTERMEDIATE_THRESHOLDS,
   type DirectionRange,
   type HourlyForecast,
+  type Observation,
   type Spot,
   type Verdict,
 } from "@windsiren/shared";
@@ -55,6 +56,32 @@ export async function fetchTodayVerdict(spot: Spot): Promise<SpotWithVerdict> {
 
 export async function fetch3DayForecast(spot: Spot): Promise<HourlyForecast[]> {
   return forecaster.fetchHourly(spot.lat, spot.lng, 3);
+}
+
+export type LiveObservation = {
+  observation: Observation;
+  ageMinutes: number;
+};
+
+// Fetches the most recent KNMI 10-min observation for a spot's nearest
+// station. Returns null when the spot has no knmi_station_id configured,
+// or when the fetch/parse fails — callers render a graceful "not available"
+// state rather than surfacing errors to users.
+export async function fetchLiveObservation(
+  spot: Spot,
+  apiKey: string | undefined,
+  now: Date = new Date(),
+): Promise<LiveObservation | null> {
+  if (!spot.knmiStationId) return null;
+  if (!apiKey) return null;
+  try {
+    const source = new KnmiObservationSource(apiKey);
+    const obs = await source.fetchLatest(spot.knmiStationId);
+    const ageMs = now.getTime() - new Date(obs.observedAt).getTime();
+    return { observation: obs, ageMinutes: Math.max(0, Math.round(ageMs / 60000)) };
+  } catch {
+    return null;
+  }
 }
 
 export function averageWindMs(hours: HourlyForecast[]): number | null {

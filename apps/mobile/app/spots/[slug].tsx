@@ -15,16 +15,19 @@ import {
 import {
   dbRowToSpot,
   fetch3DayForecast,
+  fetchLiveObservation,
   formatDayLabel,
   formatHourLabel,
   groupHoursByLocalDay,
   type DayGroup,
+  type LiveObservation,
 } from "@windsiren/core";
 import { supabase } from "../../lib/supabase";
 
 type Loaded = {
   spot: Spot;
   days: DayGroup[];
+  live: LiveObservation | null;
 };
 
 export default function SpotDetailScreen() {
@@ -56,10 +59,13 @@ export default function SpotDetailScreen() {
       const spot = dbRowToSpot(row);
 
       try {
-        const hours = await fetch3DayForecast(spot);
+        const [hours, live] = await Promise.all([
+          fetch3DayForecast(spot),
+          fetchLiveObservation(spot, process.env.EXPO_PUBLIC_KNMI_API_KEY),
+        ]);
         if (cancelled) return;
         const days = groupHoursByLocalDay(hours).slice(0, 3);
-        setLoaded({ spot, days });
+        setLoaded({ spot, days, live });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -82,6 +88,7 @@ export default function SpotDetailScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
           <SpotHeader spot={loaded.spot} />
+          {loaded.live ? <LivePanel live={loaded.live} /> : null}
           {loaded.days.map((day) => (
             <DaySection key={day.dateKey} spot={loaded.spot} day={day} />
           ))}
@@ -111,6 +118,46 @@ function SpotHeader({ spot }: { spot: Spot }) {
         {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
       </Text>
       {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
+    </View>
+  );
+}
+
+function LivePanel({ live }: { live: LiveObservation }) {
+  const { observation: o, ageMinutes } = live;
+  const stale = ageMinutes > 20;
+  return (
+    <View style={styles.livePanel}>
+      <View style={styles.liveHeader}>
+        <Text style={styles.liveHeaderLabel}>LIVE — KNMI {o.stationId}</Text>
+        <Text style={stale ? styles.liveAgeStale : styles.liveAge}>
+          {ageMinutes === 0 ? "just now" : `${ageMinutes} min ago`}
+          {stale ? " · stale" : ""}
+        </Text>
+      </View>
+      <View style={styles.liveStats}>
+        <LiveStat
+          label="Wind"
+          value={`${msToKnots(o.windSpeedMs).toFixed(0)} kn`}
+          sub={cardinalDirection(o.windDirectionDeg)}
+        />
+        <LiveStat label="Gust" value={`${msToKnots(o.gustMs).toFixed(0)} kn`} />
+        <LiveStat label="Dir" value={`${Math.round(o.windDirectionDeg)}°`} />
+        {o.airTempC !== null ? (
+          <LiveStat label="Air" value={`${o.airTempC.toFixed(0)}°C`} />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function LiveStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <View style={styles.liveStat}>
+      <Text style={styles.liveStatLabel}>{label}</Text>
+      <View style={styles.liveStatValueRow}>
+        <Text style={styles.liveStatValue}>{value}</Text>
+        {sub ? <Text style={styles.liveStatSub}>{sub}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -208,7 +255,30 @@ const styles = StyleSheet.create({
   },
   errorTitle: { fontWeight: "600", color: "#991b1b" },
   errorText: { marginTop: 4, color: "#7f1d1d", fontSize: 13 },
-  headerBox: { marginBottom: 24 },
+  headerBox: { marginBottom: 16 },
+  livePanel: {
+    padding: 14,
+    marginBottom: 24,
+    borderRadius: 10,
+    backgroundColor: "#fafafa",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#e5e5e5",
+  },
+  liveHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  liveHeaderLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: "#6b7280",
+  },
+  liveAge: { fontSize: 11, color: "#6b7280" },
+  liveAgeStale: { fontSize: 11, color: "#b45309" },
+  liveStats: { flexDirection: "row", flexWrap: "wrap", gap: 20 },
+  liveStat: {},
+  liveStatLabel: { fontSize: 10, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 },
+  liveStatValueRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 },
+  liveStatValue: { fontSize: 20, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  liveStatSub: { fontSize: 11, color: "#6b7280" },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 10 },
   title: { fontSize: 26, fontWeight: "700" },
   meta: { fontSize: 12, color: "#6b7280", marginTop: 4 },

@@ -14,10 +14,12 @@ import { supabase } from "@/lib/supabase";
 import {
   dbRowToSpot,
   fetch3DayForecast,
+  fetchLiveObservation,
   formatDayLabel,
   formatHourLabel,
   groupHoursByLocalDay,
   type DayGroup,
+  type LiveObservation,
 } from "@windsiren/core";
 
 export const dynamic = "force-dynamic";
@@ -45,14 +47,19 @@ export default async function SpotDetailPage({
 
   const spot = dbRowToSpot(row);
 
-  let hours: HourlyForecast[] = [];
-  let forecastError: string | null = null;
-  try {
-    hours = await fetch3DayForecast(spot);
-  } catch (e) {
-    forecastError = e instanceof Error ? e.message : String(e);
-  }
+  // Fetch forecast + live observation in parallel; live-observation failure
+  // is non-fatal and handled inside the helper (returns null).
+  const knmiKey = process.env.NEXT_PUBLIC_KNMI_API_KEY;
+  const [forecastResult, liveObservation] = await Promise.all([
+    fetch3DayForecast(spot).then(
+      (hours) => ({ ok: true as const, hours }),
+      (err) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }),
+    ),
+    fetchLiveObservation(spot, knmiKey),
+  ]);
 
+  const hours: HourlyForecast[] = forecastResult.ok ? forecastResult.hours : [];
+  const forecastError = forecastResult.ok ? null : forecastResult.error;
   const days = groupHoursByLocalDay(hours).slice(0, 3);
 
   return (
@@ -88,6 +95,8 @@ export default async function SpotDetailPage({
         ) : null}
       </header>
 
+      {liveObservation ? <LivePanel live={liveObservation} /> : null}
+
       {forecastError ? (
         <ErrorCard title="Forecast unavailable" message={forecastError} />
       ) : days.length === 0 ? (
@@ -101,6 +110,49 @@ export default async function SpotDetailPage({
       )}
     </main>
   );
+}
+
+function LivePanel({ live }: { live: LiveObservation }) {
+  const { observation: o, ageMinutes } = live;
+  const stale = ageMinutes > 20; // KNMI publishes every 10 min; 20+ min = something's off
+  return (
+    <section className="mb-8 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Live — KNMI station {o.stationId}
+        </h2>
+        <span className={`text-xs ${stale ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"}`}>
+          {ageMinutes === 0 ? "just now" : `${ageMinutes} min ago`}
+          {stale ? " · stale" : ""}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-6">
+        <Stat label="Wind" value={`${msToKn(o.windSpeedMs)} kn`} sub={cardinalDirection(o.windDirectionDeg)} />
+        <Stat label="Gust" value={`${msToKn(o.gustMs)} kn`} />
+        <Stat label="Dir" value={`${Math.round(o.windDirectionDeg)}°`} />
+        {o.airTempC !== null ? <Stat label="Air" value={`${o.airTempC.toFixed(0)}°C`} /> : null}
+        {o.pressureHpa !== null ? (
+          <Stat label="Pressure" value={`${o.pressureHpa.toFixed(0)} hPa`} />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className="mt-0.5 flex items-baseline gap-1">
+        <span className="font-mono text-xl font-semibold">{value}</span>
+        {sub ? <span className="text-xs text-zinc-500">{sub}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function msToKn(ms: number): string {
+  return msToKnots(ms).toFixed(0);
 }
 
 function DaySection({ spot, day }: { spot: Spot; day: DayGroup }) {
