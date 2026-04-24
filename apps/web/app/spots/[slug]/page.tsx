@@ -24,6 +24,7 @@ import {
   type LiveObservation,
 } from "@windsiren/core";
 import { FavoriteButton } from "./FavoriteButton";
+import { SpotSocial } from "./SpotSocial";
 import { WindRose } from "./WindRose";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +143,8 @@ export default async function SpotDetailPage({
           ))}
         </div>
       )}
+
+      <SpotSocial spotId={spot.id} />
     </main>
   );
 }

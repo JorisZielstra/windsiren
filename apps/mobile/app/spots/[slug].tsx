@@ -31,6 +31,7 @@ import {
   type DayGroup,
   type LiveObservation,
 } from "@windsiren/core";
+import { SpotSocial } from "../../components/SpotSocial";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
@@ -176,6 +177,7 @@ export default function SpotDetailScreen() {
               tides={loaded.tidesPerDay[i] ?? []}
             />
           ))}
+          <SpotSocial spotId={loaded.spot.id} />
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
