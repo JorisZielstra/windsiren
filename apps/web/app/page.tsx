@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { dbRowToSpot, fetchTodayVerdict, peakWindMs } from "@/lib/spots";
+import { dbRowToSpot, fetchTodayVerdict, peakWindMs } from "@windsiren/core";
 import { msToKnots } from "@windsiren/shared";
 
 // Dynamic because we fetch live forecasts on every request.

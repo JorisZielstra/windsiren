@@ -12,7 +12,6 @@ import {
   type Spot,
   type Verdict,
 } from "@windsiren/shared";
-import { supabase } from "../../lib/supabase";
 import {
   dbRowToSpot,
   fetch3DayForecast,
@@ -20,7 +19,8 @@ import {
   formatHourLabel,
   groupHoursByLocalDay,
   type DayGroup,
-} from "../../lib/spots";
+} from "@windsiren/core";
+import { supabase } from "../../lib/supabase";
 
 type Loaded = {
   spot: Spot;

@@ -9,13 +9,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { msToKnots, type Verdict } from "@windsiren/shared";
-import { supabase } from "../lib/supabase";
 import {
   dbRowToSpot,
   fetchTodayVerdict,
   peakWindMs,
   type SpotWithVerdict,
-} from "../lib/spots";
+} from "@windsiren/core";
+import { supabase } from "../lib/supabase";
 
 export default function SpotsListScreen() {
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);

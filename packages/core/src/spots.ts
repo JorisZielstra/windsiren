@@ -1,3 +1,7 @@
+// App-level helpers shared between web + mobile. Wire @windsiren/providers
+// and @windsiren/supabase to @windsiren/shared's decision engine. No React,
+// no DOM/RN APIs — consumable from server and client alike.
+
 import { OpenMeteoForecastSource } from "@windsiren/providers";
 import {
   evaluateDay,
@@ -11,12 +15,16 @@ import type { SpotRow } from "@windsiren/supabase";
 
 export type SpotWithVerdict = {
   spot: Spot;
-  verdict: Verdict | null; // null = fetch failed
-  hours: HourlyForecast[]; // today's hourly forecast (may be empty on error)
+  verdict: Verdict | null;
+  hours: HourlyForecast[];
 };
 
-// Single forecaster reused across requests. Safe because it's stateless except
-// for an injected fetch, which Node dedupes by default.
+export type DayGroup = {
+  dateKey: string;           // "YYYY-MM-DD" in NL local time
+  hours: HourlyForecast[];
+};
+
+// Single forecaster reused across calls. Stateless apart from injected fetch.
 const forecaster = new OpenMeteoForecastSource();
 
 export function dbRowToSpot(row: SpotRow): Spot {
@@ -41,7 +49,6 @@ export async function fetchTodayVerdict(spot: Spot): Promise<SpotWithVerdict> {
     const verdict = evaluateDay({ spot, hours, thresholds: INTERMEDIATE_THRESHOLDS });
     return { spot, verdict, hours };
   } catch {
-    // Fetch or evaluation failure should never break the page — surface as null verdict.
     return { spot, verdict: null, hours: [] };
   }
 }
@@ -50,12 +57,15 @@ export async function fetch3DayForecast(spot: Spot): Promise<HourlyForecast[]> {
   return forecaster.fetchHourly(spot.lat, spot.lng, 3);
 }
 
-// Groups hourly entries into calendar days using the spot's local timezone
-// (hard-coded to Europe/Amsterdam for v0.1 NL-only scope).
-export type DayGroup = {
-  dateKey: string;   // "2026-04-24" in the target timezone
-  hours: HourlyForecast[];
-};
+export function averageWindMs(hours: HourlyForecast[]): number | null {
+  if (hours.length === 0) return null;
+  return hours.reduce((s, h) => s + h.windSpeedMs, 0) / hours.length;
+}
+
+export function peakWindMs(hours: HourlyForecast[]): number | null {
+  if (hours.length === 0) return null;
+  return Math.max(...hours.map((h) => h.windSpeedMs));
+}
 
 const NL_TZ = "Europe/Amsterdam";
 
@@ -81,8 +91,7 @@ export function groupHoursByLocalDay(hours: HourlyForecast[]): DayGroup[] {
 }
 
 export function formatDayLabel(dateKey: string): string {
-  // dateKey is "YYYY-MM-DD". Interpret as local midnight in NL, format as human label.
-  const d = new Date(`${dateKey}T00:00:00+01:00`); // CET offset; CEST is +02 but date is correct
+  const d = new Date(`${dateKey}T00:00:00+01:00`);
   return new Intl.DateTimeFormat("en-NL", {
     timeZone: NL_TZ,
     weekday: "long",
@@ -98,14 +107,4 @@ export function formatHourLabel(isoTime: string): string {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(new Date(isoTime));
-}
-
-export function averageWindMs(hours: HourlyForecast[]): number | null {
-  if (hours.length === 0) return null;
-  return hours.reduce((s, h) => s + h.windSpeedMs, 0) / hours.length;
-}
-
-export function peakWindMs(hours: HourlyForecast[]): number | null {
-  if (hours.length === 0) return null;
-  return Math.max(...hours.map((h) => h.windSpeedMs));
 }

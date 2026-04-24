@@ -18,7 +18,7 @@ import {
   formatHourLabel,
   groupHoursByLocalDay,
   type DayGroup,
-} from "@/lib/spots";
+} from "@windsiren/core";
 
 export const dynamic = "force-dynamic";
 

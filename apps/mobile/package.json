@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@windsiren/core": "workspace:*",
     "@windsiren/providers": "workspace:*",
     "@windsiren/shared": "workspace:*",
     "@windsiren/supabase": "workspace:*",
