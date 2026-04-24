@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { msToKnots, type Verdict } from "@windsiren/shared";
 import {
   dbRowToSpot,
+  fetchFavoriteSpotIds,
   fetchTodayVerdict,
   peakWindMs,
   type SpotWithVerdict,
@@ -22,6 +23,7 @@ import { supabase } from "../lib/supabase";
 export default function SpotsListScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
@@ -40,14 +42,22 @@ export default function SpotsListScreen() {
           return;
         }
         const spots = (rows ?? []).map(dbRowToSpot);
-        const results = await Promise.all(spots.map(fetchTodayVerdict));
-        if (!cancelled) setItems(results);
+        const [results, favIds] = await Promise.all([
+          Promise.all(spots.map(fetchTodayVerdict)),
+          user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
+        ]);
+        if (!cancelled) {
+          setItems(results);
+          setFavoriteIds(favIds);
+        }
       })();
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [user]),
   );
+
+  const favoriteItems = items?.filter((i) => favoriteIds.has(i.spot.id)) ?? [];
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -92,6 +102,17 @@ export default function SpotsListScreen() {
           data={items}
           keyExtractor={(item) => item.spot.id}
           renderItem={({ item }) => <SpotRow item={item} />}
+          ListHeaderComponent={
+            user && favoriteItems.length > 0 ? (
+              <View style={styles.favSection}>
+                <Text style={styles.sectionLabel}>Your spots</Text>
+                {favoriteItems.map((item) => (
+                  <SpotRow key={item.spot.id} item={item} />
+                ))}
+                <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>All NL spots</Text>
+              </View>
+            ) : null
+          }
         />
       )}
     </SafeAreaView>
@@ -159,6 +180,18 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: "#6b7280" },
   headerBtn: { fontSize: 14, color: "#0369a1", fontWeight: "600", paddingHorizontal: 8 },
   headerRight: { flexDirection: "row", alignItems: "center" },
+  favSection: {},
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: "#6b7280",
+    textTransform: "uppercase",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  sectionLabelSpaced: { paddingTop: 20 },
   loader: { marginTop: 48 },
   errorBox: {
     margin: 16,

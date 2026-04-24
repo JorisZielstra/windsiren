@@ -23,6 +23,7 @@ import {
   type DayGroup,
   type LiveObservation,
 } from "@windsiren/core";
+import { FavoriteButton } from "./FavoriteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -77,13 +78,18 @@ export default async function SpotDetailPage({
       </Link>
 
       <header className="mt-4 mb-10">
-        <div className="flex items-center gap-3">
-          <h1 className="text-4xl font-bold tracking-tight">{spot.name}</h1>
-          {spot.tideSensitive ? (
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-              Tide sensitive
-            </span>
-          ) : null}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-bold tracking-tight">{spot.name}</h1>
+              {spot.tideSensitive ? (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  Tide sensitive
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <FavoriteButton spotId={spot.id} />
         </div>
         <p className="mt-1 text-sm text-zinc-500">
           {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands

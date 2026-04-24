@@ -1,6 +1,6 @@
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   cardinalDirection,
@@ -14,6 +14,7 @@ import {
   type Verdict,
 } from "@windsiren/shared";
 import {
+  addFavorite,
   dbRowToSpot,
   fetch3DayForecast,
   fetchDailyTides,
@@ -21,9 +22,12 @@ import {
   formatDayLabel,
   formatHourLabel,
   groupHoursByLocalDay,
+  isSpotFavorited,
+  removeFavorite,
   type DayGroup,
   type LiveObservation,
 } from "@windsiren/core";
+import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
 type Loaded = {
@@ -114,22 +118,90 @@ export default function SpotDetailScreen() {
 function SpotHeader({ spot }: { spot: Spot }) {
   return (
     <View style={styles.headerBox}>
-      <View style={styles.titleLine}>
-        <Text style={styles.title}>{spot.name}</Text>
-        {spot.tideSensitive ? (
-          <View style={styles.tideBadge}>
-            <Text style={styles.tideBadgeText}>Tide sensitive</Text>
+      <View style={styles.titleRow}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.titleLine}>
+            <Text style={styles.title}>{spot.name}</Text>
+            {spot.tideSensitive ? (
+              <View style={styles.tideBadge}>
+                <Text style={styles.tideBadgeText}>Tide sensitive</Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
+          <Text style={styles.meta}>
+            {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
+          </Text>
+          <Text style={styles.meta}>
+            Intermediate · safe wind{" "}
+            {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
+          </Text>
+          {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
+        </View>
+        <FavoriteButton spotId={spot.id} />
       </View>
-      <Text style={styles.meta}>
-        {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
-      </Text>
-      <Text style={styles.meta}>
-        Intermediate profile · safe wind{" "}
-        {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
-      </Text>
-      {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
+    </View>
+  );
+}
+
+function FavoriteButton({ spotId }: { spotId: string }) {
+  const { user } = useAuth();
+  const [favorited, setFavorited] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setFavorited(null);
+      return;
+    }
+    let cancelled = false;
+    isSpotFavorited(supabase, user.id, spotId).then((v) => {
+      if (!cancelled) setFavorited(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, spotId]);
+
+  if (!user) {
+    return (
+      <Link href="/sign-in" asChild>
+        <Pressable style={styles.favBtn}>
+          <Text style={styles.favBtnText}>☆ Sign in</Text>
+        </Pressable>
+      </Link>
+    );
+  }
+
+  async function toggle() {
+    if (!user || busy || favorited === null) return;
+    setBusy(true);
+    setMessage(null);
+    const result = favorited
+      ? await removeFavorite(supabase, user.id, spotId)
+      : await addFavorite(supabase, user.id, spotId);
+    setBusy(false);
+    if (result.ok) {
+      setFavorited(result.favorited);
+    } else if (result.reason === "limit_reached") {
+      setMessage("Free plan: 1 favorite. Multi-spot coming soon.");
+    } else {
+      setMessage(`Couldn't update: ${result.message}`);
+    }
+  }
+
+  return (
+    <View style={{ alignItems: "flex-end" }}>
+      <Pressable
+        onPress={toggle}
+        disabled={busy || favorited === null}
+        style={[styles.favBtn, favorited ? styles.favBtnActive : null, busy && { opacity: 0.5 }]}
+      >
+        <Text style={favorited ? styles.favBtnActiveText : styles.favBtnText}>
+          {favorited === null ? "…" : favorited ? "★ Favorited" : "☆ Favorite"}
+        </Text>
+      </Pressable>
+      {message ? <Text style={styles.favMessage}>{message}</Text> : null}
     </View>
   );
 }
@@ -297,6 +369,19 @@ const styles = StyleSheet.create({
   errorTitle: { fontWeight: "600", color: "#991b1b" },
   errorText: { marginTop: 4, color: "#7f1d1d", fontSize: 13 },
   headerBox: { marginBottom: 16 },
+  titleRow: { flexDirection: "row", gap: 12 },
+  favBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#d4d4d8",
+    backgroundColor: "#fff",
+  },
+  favBtnActive: { borderColor: "#fbbf24", backgroundColor: "#fef3c7" },
+  favBtnText: { fontSize: 13, fontWeight: "600", color: "#18181b" },
+  favBtnActiveText: { fontSize: 13, fontWeight: "600", color: "#78350f" },
+  favMessage: { marginTop: 6, fontSize: 10, color: "#6b7280", maxWidth: 140, textAlign: "right" },
   livePanel: {
     padding: 14,
     marginBottom: 24,

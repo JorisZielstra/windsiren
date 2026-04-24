@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { dbRowToSpot, fetchTodayVerdict, peakWindMs } from "@windsiren/core";
+import {
+  dbRowToSpot,
+  fetchFavoriteSpotIds,
+  fetchTodayVerdict,
+  peakWindMs,
+  type SpotWithVerdict,
+} from "@windsiren/core";
 import { msToKnots } from "@windsiren/shared";
 
 // Dynamic because we fetch live forecasts on every request.
@@ -34,6 +40,10 @@ export default async function Home() {
 
   const spots = (rows ?? []).map(dbRowToSpot);
   const withVerdicts = await Promise.all(spots.map(fetchTodayVerdict));
+
+  // If signed in, compute the subset of withVerdicts that the user has favorited.
+  const favoriteIds = user ? await fetchFavoriteSpotIds(authed, user.id) : new Set<string>();
+  const favorites = withVerdicts.filter((item) => favoriteIds.has(item.spot.id));
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -69,6 +79,22 @@ export default async function Home() {
         </div>
       </header>
 
+      {user && favorites.length > 0 ? (
+        <section className="mb-10">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Your spots
+          </h2>
+          <ul className="space-y-2">
+            {favorites.map((item) => (
+              <SpotRow key={item.spot.id} item={item} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        All NL spots
+      </h2>
       <ul className="space-y-2">
         {withVerdicts.map(({ spot, verdict, hours }) => {
           const peak = peakWindMs(hours);
@@ -102,6 +128,34 @@ export default async function Home() {
         })}
       </ul>
     </main>
+  );
+}
+
+function SpotRow({ item }: { item: SpotWithVerdict }) {
+  const peak = peakWindMs(item.hours);
+  return (
+    <li className="flex items-center justify-between rounded-md border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900">
+      <Link href={`/spots/${item.spot.slug}`} className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{item.spot.name}</span>
+          {item.spot.tideSensitive ? (
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              Tide
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-0.5 text-xs text-zinc-500">
+          {item.spot.lat.toFixed(3)}°N, {item.spot.lng.toFixed(3)}°E
+          {peak !== null ? (
+            <>
+              {" · "}
+              peak <span className="font-mono">{msToKnots(peak).toFixed(0)} kn</span>
+            </>
+          ) : null}
+        </div>
+      </Link>
+      <VerdictBadge verdict={item.verdict} />
+    </li>
   );
 }
 
