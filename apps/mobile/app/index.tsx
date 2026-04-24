@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -80,7 +81,9 @@ function SpotRow({ item }: { item: SpotWithVerdict }) {
   const peak = peakWindMs(item.hours);
   return (
     <Link href={`/spots/${item.spot.slug}`} asChild>
-      <View style={styles.row}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.rowPressed : null]}
+      >
         <View style={styles.rowMain}>
           <View style={styles.rowTitleLine}>
             <Text style={styles.rowTitle}>{item.spot.name}</Text>
@@ -96,7 +99,7 @@ function SpotRow({ item }: { item: SpotWithVerdict }) {
           </Text>
         </View>
         <VerdictPill verdict={item.verdict} />
-      </View>
+      </Pressable>
     </Link>
   );
 }
@@ -151,6 +154,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#f0f0f0",
+  },
+  rowPressed: {
+    backgroundColor: "#f4f4f5",
   },
   rowMain: { flex: 1 },
   rowTitleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
