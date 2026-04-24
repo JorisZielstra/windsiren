@@ -24,6 +24,7 @@ import {
   type LiveObservation,
 } from "@windsiren/core";
 import { FavoriteButton } from "./FavoriteButton";
+import { WindRose } from "./WindRose";
 
 export const dynamic = "force-dynamic";
 
@@ -94,14 +95,32 @@ export default async function SpotDetailPage({
         <p className="mt-1 text-sm text-zinc-500">
           {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
         </p>
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Safe wind directions:{" "}
-          <span className="font-mono">
-            {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
-          </span>
-        </p>
+
+        <div className="mt-4 flex items-center gap-4">
+          <WindRose
+            safeDirections={spot.safeWindDirections}
+            currentWindDirectionDeg={liveObservation?.observation.windDirectionDeg ?? null}
+            size={120}
+          />
+          <div className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p>
+              <span className="inline-block h-2 w-2 translate-y-[-1px] rounded-sm bg-emerald-400/80 dark:bg-emerald-800" />{" "}
+              Safe wind arc
+            </p>
+            {liveObservation ? (
+              <p className="mt-1">
+                <span className="inline-block h-2 w-2 translate-y-[-1px] rounded-full bg-sky-600 dark:bg-sky-400" />{" "}
+                Current wind ({Math.round(liveObservation.observation.windDirectionDeg)}°)
+              </p>
+            ) : null}
+            <p className="mt-1 font-mono text-xs text-zinc-500">
+              {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
+            </p>
+          </div>
+        </div>
+
         {spot.hazards ? (
-          <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">⚠ {spot.hazards}</p>
+          <p className="mt-4 text-sm text-amber-700 dark:text-amber-400">⚠ {spot.hazards}</p>
         ) : null}
       </header>
 

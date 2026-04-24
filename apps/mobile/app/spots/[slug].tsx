@@ -2,6 +2,7 @@ import { Link, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
 import {
   cardinalDirection,
   evaluateDay,
@@ -15,6 +16,7 @@ import {
 } from "@windsiren/shared";
 import {
   addFavorite,
+  cardinalLabelPositions,
   dbRowToSpot,
   fetch3DayForecast,
   fetchDailyTides,
@@ -23,7 +25,9 @@ import {
   formatHourLabel,
   groupHoursByLocalDay,
   isSpotFavorited,
+  needleEndpoint,
   removeFavorite,
+  safeSectorPaths,
   type DayGroup,
   type LiveObservation,
 } from "@windsiren/core";
@@ -36,6 +40,67 @@ type Loaded = {
   tidesPerDay: TidePoint[][];
   live: LiveObservation | null;
 };
+
+function WindRose({
+  safeDirections,
+  currentWindDirectionDeg,
+  size = 100,
+}: {
+  safeDirections: Spot["safeWindDirections"];
+  currentWindDirectionDeg?: number | null;
+  size?: number;
+}) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const outer = size / 2 - 12;
+  const labelR = size / 2 - 4;
+  const labels = cardinalLabelPositions(cx, cy, labelR);
+  const paths = safeSectorPaths(cx, cy, outer, safeDirections);
+  const needleTip =
+    typeof currentWindDirectionDeg === "number"
+      ? needleEndpoint(cx, cy, outer - 3, currentWindDirectionDeg)
+      : null;
+
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <Circle cx={cx} cy={cy} r={outer} fill="#fafafa" stroke="#e5e5e5" strokeWidth="1" />
+      {paths.map((d, i) => (
+        <Path key={i} d={d} fill="#a7f3d0" fillOpacity={0.6} stroke="#10b981" strokeOpacity={0.4} strokeWidth="1" />
+      ))}
+      {[0, 90, 180, 270].map((deg) => (
+        <Line
+          key={deg}
+          x1={cx}
+          y1={cy - outer + 2}
+          x2={cx}
+          y2={cy - outer + 6}
+          stroke="#d4d4d8"
+          strokeWidth="1"
+          transform={`rotate(${deg} ${cx} ${cy})`}
+        />
+      ))}
+      {needleTip ? (
+        <G>
+          <Line
+            x1={cx}
+            y1={cy}
+            x2={needleTip.x}
+            y2={needleTip.y}
+            stroke="#0284c7"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <Circle cx={needleTip.x} cy={needleTip.y} r="3" fill="#0284c7" />
+        </G>
+      ) : null}
+      <Circle cx={cx} cy={cy} r="2" fill="#9ca3af" />
+      <SvgText x={labels.N.x} y={labels.N.y + 3} textAnchor="middle" fontSize="9" fontWeight="600" fill="#6b7280">N</SvgText>
+      <SvgText x={labels.E.x} y={labels.E.y + 3} textAnchor="middle" fontSize="9" fontWeight="600" fill="#6b7280">E</SvgText>
+      <SvgText x={labels.S.x} y={labels.S.y + 3} textAnchor="middle" fontSize="9" fontWeight="600" fill="#6b7280">S</SvgText>
+      <SvgText x={labels.W.x} y={labels.W.y + 3} textAnchor="middle" fontSize="9" fontWeight="600" fill="#6b7280">W</SvgText>
+    </Svg>
+  );
+}
 
 export default function SpotDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -98,7 +163,10 @@ export default function SpotDetailScreen() {
         <ActivityIndicator style={styles.loader} size="large" />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
-          <SpotHeader spot={loaded.spot} />
+          <SpotHeader
+            spot={loaded.spot}
+            liveDirection={loaded.live?.observation.windDirectionDeg ?? null}
+          />
           {loaded.live ? <LivePanel live={loaded.live} /> : null}
           {loaded.days.map((day, i) => (
             <DaySection
@@ -115,7 +183,13 @@ export default function SpotDetailScreen() {
   );
 }
 
-function SpotHeader({ spot }: { spot: Spot }) {
+function SpotHeader({
+  spot,
+  liveDirection,
+}: {
+  spot: Spot;
+  liveDirection: number | null;
+}) {
   return (
     <View style={styles.headerBox}>
       <View style={styles.titleRow}>
@@ -131,14 +205,32 @@ function SpotHeader({ spot }: { spot: Spot }) {
           <Text style={styles.meta}>
             {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
           </Text>
-          <Text style={styles.meta}>
-            Safe wind{" "}
-            {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
-          </Text>
-          {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
         </View>
         <FavoriteButton spotId={spot.id} />
       </View>
+
+      <View style={styles.windRoseRow}>
+        <WindRose safeDirections={spot.safeWindDirections} currentWindDirectionDeg={liveDirection} />
+        <View style={styles.windRoseLegend}>
+          <View style={styles.legendRow}>
+            <View style={styles.legendSwatchSafe} />
+            <Text style={styles.legendLabel}>Safe wind arc</Text>
+          </View>
+          {liveDirection !== null ? (
+            <View style={styles.legendRow}>
+              <View style={styles.legendSwatchNeedle} />
+              <Text style={styles.legendLabel}>
+                Current wind ({Math.round(liveDirection)}°)
+              </Text>
+            </View>
+          ) : null}
+          <Text style={styles.legendDirs}>
+            {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
+          </Text>
+        </View>
+      </View>
+
+      {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
     </View>
   );
 }
@@ -370,6 +462,20 @@ const styles = StyleSheet.create({
   errorText: { marginTop: 4, color: "#7f1d1d", fontSize: 13 },
   headerBox: { marginBottom: 16 },
   titleRow: { flexDirection: "row", gap: 12 },
+  windRoseRow: { flexDirection: "row", alignItems: "center", gap: 16, marginTop: 14 },
+  windRoseLegend: { flex: 1, gap: 4 },
+  legendRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  legendSwatchSafe: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: "#a7f3d0",
+    borderWidth: 1,
+    borderColor: "#10b981",
+  },
+  legendSwatchNeedle: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#0284c7" },
+  legendLabel: { fontSize: 12, color: "#4b5563" },
+  legendDirs: { fontSize: 11, fontFamily: "Menlo", color: "#6b7280", marginTop: 6 },
   favBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
