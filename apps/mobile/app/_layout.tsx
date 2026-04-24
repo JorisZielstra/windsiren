@@ -19,6 +19,8 @@ export default function RootLayout() {
           <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
           <Stack.Screen name="sign-up" options={{ title: "Create account" }} />
           <Stack.Screen name="profile" options={{ title: "Account" }} />
+          <Stack.Screen name="profile-edit" options={{ title: "Edit profile" }} />
+          <Stack.Screen name="users/[userId]" options={{ title: "" }} />
         </Stack>
         <StatusBar style="auto" />
       </SafeAreaProvider>

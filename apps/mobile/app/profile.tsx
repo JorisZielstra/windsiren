@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { Link, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -72,6 +72,19 @@ export default function ProfileScreen() {
           }
         />
 
+        <View style={styles.actionsRow}>
+          <Link href={`/users/${user.id}`} asChild>
+            <Pressable style={styles.primaryBtn}>
+              <Text style={styles.primaryBtnText}>View public profile</Text>
+            </Pressable>
+          </Link>
+          <Link href="/profile-edit" asChild>
+            <Pressable style={styles.secondaryBtn}>
+              <Text style={styles.secondaryBtnText}>Edit profile</Text>
+            </Pressable>
+          </Link>
+        </View>
+
         <Pressable
           style={[styles.signOutBtn, signingOut && styles.signOutBtnDisabled]}
           onPress={onSignOut}
@@ -127,7 +140,7 @@ const styles = StyleSheet.create({
   rowValueMuted: { color: "#9ca3af" },
   rowValueCap: { textTransform: "capitalize" },
   signOutBtn: {
-    marginTop: 24,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: "#d4d4d8",
     paddingVertical: 12,
@@ -136,4 +149,9 @@ const styles = StyleSheet.create({
   },
   signOutBtnDisabled: { opacity: 0.6 },
   signOutText: { fontSize: 15, fontWeight: "600", color: "#18181b" },
+  actionsRow: { flexDirection: "row", gap: 10, marginTop: 24, flexWrap: "wrap" },
+  primaryBtn: { backgroundColor: "#18181b", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  primaryBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  secondaryBtn: { borderWidth: 1, borderColor: "#d4d4d8", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  secondaryBtnText: { color: "#18181b", fontSize: 14, fontWeight: "600" },
 });

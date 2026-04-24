@@ -46,14 +46,28 @@ export default async function ProfilePage() {
         </dd>
       </dl>
 
-      <form action="/auth/sign-out" method="post" className="mt-10">
-        <button
-          type="submit"
+      <div className="mt-10 flex flex-wrap items-center gap-3">
+        <Link
+          href={`/users/${user.id}`}
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          View public profile
+        </Link>
+        <Link
+          href="/profile/edit"
           className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
         >
-          Sign out
-        </button>
-      </form>
+          Edit profile
+        </Link>
+        <form action="/auth/sign-out" method="post">
+          <button
+            type="submit"
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+          >
+            Sign out
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
