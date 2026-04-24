@@ -70,8 +70,6 @@ export type ThresholdProfile = {
   daylightOnly: boolean;
 };
 
-export type ProfileMode = "beginner" | "intermediate" | "expert" | "personalized";
-
 export type VerdictReason = {
   metric: string;                  // e.g. "wind_speed", "gust", "direction"
   passed: boolean;

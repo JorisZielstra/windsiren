@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   cardinalDirection,
   evaluateDay,
-  INTERMEDIATE_THRESHOLDS,
+  DEFAULT_THRESHOLDS,
   isHourRideable,
   msToKnots,
   type HourlyForecast,
@@ -95,8 +95,7 @@ export default async function SpotDetailPage({
           {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
         </p>
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Evaluated with <span className="font-medium">intermediate</span> profile. Safe wind
-          directions:{" "}
+          Safe wind directions:{" "}
           <span className="font-mono">
             {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
           </span>
@@ -180,8 +179,8 @@ function DaySection({
   day: DayGroup;
   tides: TidePoint[];
 }) {
-  const verdict = evaluateDay({ spot, hours: day.hours, thresholds: INTERMEDIATE_THRESHOLDS });
-  const rideableCount = day.hours.filter((h) => isHourRideable(h, spot, INTERMEDIATE_THRESHOLDS))
+  const verdict = evaluateDay({ spot, hours: day.hours, thresholds: DEFAULT_THRESHOLDS });
+  const rideableCount = day.hours.filter((h) => isHourRideable(h, spot, DEFAULT_THRESHOLDS))
     .length;
 
   return (
@@ -223,7 +222,7 @@ function DaySection({
 }
 
 function HourRow({ hour, spot }: { hour: HourlyForecast; spot: Spot }) {
-  const rideable = isHourRideable(hour, spot, INTERMEDIATE_THRESHOLDS);
+  const rideable = isHourRideable(hour, spot, DEFAULT_THRESHOLDS);
   return (
     <tr className="border-t border-zinc-100 dark:border-zinc-800">
       <td className="px-3 py-2 font-mono text-xs">{formatHourLabel(hour.time)}</td>

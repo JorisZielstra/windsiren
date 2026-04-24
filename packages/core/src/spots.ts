@@ -9,7 +9,7 @@ import {
 } from "@windsiren/providers";
 import {
   evaluateDay,
-  INTERMEDIATE_THRESHOLDS,
+  DEFAULT_THRESHOLDS,
   type DirectionRange,
   type HourlyForecast,
   type Observation,
@@ -53,7 +53,7 @@ export function dbRowToSpot(row: SpotRow): Spot {
 export async function fetchTodayVerdict(spot: Spot): Promise<SpotWithVerdict> {
   try {
     const hours = await forecaster.fetchHourly(spot.lat, spot.lng, 1);
-    const verdict = evaluateDay({ spot, hours, thresholds: INTERMEDIATE_THRESHOLDS });
+    const verdict = evaluateDay({ spot, hours, thresholds: DEFAULT_THRESHOLDS });
     return { spot, verdict, hours };
   } catch {
     return { spot, verdict: null, hours: [] };

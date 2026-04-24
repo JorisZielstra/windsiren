@@ -44,7 +44,7 @@ export default async function MapPage() {
             ← List
           </Link>
           <span className="text-sm font-semibold">WindSiren — Map</span>
-          <span className="text-xs text-zinc-500">today · intermediate</span>
+          <span className="text-xs text-zinc-500">today</span>
         </div>
       </header>
       <MapClient items={mapItems} />

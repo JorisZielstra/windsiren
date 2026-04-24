@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   cardinalDirection,
   evaluateDay,
-  INTERMEDIATE_THRESHOLDS,
+  DEFAULT_THRESHOLDS,
   isHourRideable,
   msToKnots,
   type HourlyForecast,
@@ -132,7 +132,7 @@ function SpotHeader({ spot }: { spot: Spot }) {
             {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
           </Text>
           <Text style={styles.meta}>
-            Intermediate · safe wind{" "}
+            Safe wind{" "}
             {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
           </Text>
           {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
@@ -255,9 +255,9 @@ function DaySection({
   day: DayGroup;
   tides: TidePoint[];
 }) {
-  const verdict = evaluateDay({ spot, hours: day.hours, thresholds: INTERMEDIATE_THRESHOLDS });
+  const verdict = evaluateDay({ spot, hours: day.hours, thresholds: DEFAULT_THRESHOLDS });
   const rideableCount = day.hours.filter((h) =>
-    isHourRideable(h, spot, INTERMEDIATE_THRESHOLDS),
+    isHourRideable(h, spot, DEFAULT_THRESHOLDS),
   ).length;
 
   return (
@@ -292,7 +292,7 @@ function DaySection({
 }
 
 function HourRow({ hour, spot }: { hour: HourlyForecast; spot: Spot }) {
-  const rideable = isHourRideable(hour, spot, INTERMEDIATE_THRESHOLDS);
+  const rideable = isHourRideable(hour, spot, DEFAULT_THRESHOLDS);
   return (
     <View style={styles.tableRow}>
       <Text style={[styles.cell, styles.cellTime, styles.cellMono]}>

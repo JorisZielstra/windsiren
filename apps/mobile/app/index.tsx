@@ -85,7 +85,7 @@ export default function SpotsListScreen() {
           {error
             ? "Failed to load spots"
             : items
-              ? `${items.length} curated NL spots · today · intermediate preset`
+              ? `${items.length} curated NL spots · today`
               : "Loading…"}
         </Text>
       </View>

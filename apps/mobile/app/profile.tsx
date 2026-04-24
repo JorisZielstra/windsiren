@@ -7,7 +7,6 @@ import { supabase } from "../lib/supabase";
 
 type ProfileRow = {
   display_name: string | null;
-  profile_mode: string;
   locale: string;
   created_at: string;
 };
@@ -30,7 +29,7 @@ export default function ProfileScreen() {
     let cancelled = false;
     supabase
       .from("users")
-      .select("display_name, profile_mode, locale, created_at")
+      .select("display_name, locale, created_at")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -63,7 +62,6 @@ export default function ProfileScreen() {
       <View style={styles.body}>
         <Row label="Email" value={user.email ?? ""} mono />
         <Row label="Display name" value={profile?.display_name ?? "(not set)"} muted={!profile?.display_name} />
-        <Row label="Profile mode" value={profile?.profile_mode ?? "intermediate"} capitalize />
         <Row label="Locale" value={profile?.locale ?? "nl-NL"} mono />
         <Row
           label="Member since"

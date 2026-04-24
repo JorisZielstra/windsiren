@@ -17,7 +17,7 @@ export default async function ProfilePage() {
   // Fetch the profile row from public.users (created by our handle_new_user trigger)
   const { data: profile } = await supabase
     .from("users")
-    .select("display_name, profile_mode, locale, created_at")
+    .select("display_name, locale, created_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -34,9 +34,6 @@ export default async function ProfilePage() {
 
         <dt className="text-zinc-500">Display name</dt>
         <dd>{profile?.display_name ?? <span className="text-zinc-400">(not set)</span>}</dd>
-
-        <dt className="text-zinc-500">Profile mode</dt>
-        <dd className="capitalize">{profile?.profile_mode ?? "intermediate"}</dd>
 
         <dt className="text-zinc-500">Locale</dt>
         <dd className="font-mono">{profile?.locale ?? "nl-NL"}</dd>

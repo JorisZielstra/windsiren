@@ -51,7 +51,7 @@ export default async function Home() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight">WindSiren</h1>
           <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-            {withVerdicts.length} curated NL kitesurf spots · today&apos;s forecast · intermediate preset
+            {withVerdicts.length} curated NL kitesurf spots · today&apos;s forecast
           </p>
         </div>
         <div className="mt-2 flex items-center gap-2">
