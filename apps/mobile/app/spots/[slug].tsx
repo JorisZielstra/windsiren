@@ -10,11 +10,13 @@ import {
   msToKnots,
   type HourlyForecast,
   type Spot,
+  type TidePoint,
   type Verdict,
 } from "@windsiren/shared";
 import {
   dbRowToSpot,
   fetch3DayForecast,
+  fetchDailyTides,
   fetchLiveObservation,
   formatDayLabel,
   formatHourLabel,
@@ -27,6 +29,7 @@ import { supabase } from "../../lib/supabase";
 type Loaded = {
   spot: Spot;
   days: DayGroup[];
+  tidesPerDay: TidePoint[][];
   live: LiveObservation | null;
 };
 
@@ -65,7 +68,11 @@ export default function SpotDetailScreen() {
         ]);
         if (cancelled) return;
         const days = groupHoursByLocalDay(hours).slice(0, 3);
-        setLoaded({ spot, days, live });
+        const tidesPerDay = await Promise.all(
+          days.map((d) => fetchDailyTides(spot, d.dateKey)),
+        );
+        if (cancelled) return;
+        setLoaded({ spot, days, tidesPerDay, live });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -89,8 +96,13 @@ export default function SpotDetailScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <SpotHeader spot={loaded.spot} />
           {loaded.live ? <LivePanel live={loaded.live} /> : null}
-          {loaded.days.map((day) => (
-            <DaySection key={day.dateKey} spot={loaded.spot} day={day} />
+          {loaded.days.map((day, i) => (
+            <DaySection
+              key={day.dateKey}
+              spot={loaded.spot}
+              day={day}
+              tides={loaded.tidesPerDay[i] ?? []}
+            />
           ))}
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -162,7 +174,15 @@ function LiveStat({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function DaySection({ spot, day }: { spot: Spot; day: DayGroup }) {
+function DaySection({
+  spot,
+  day,
+  tides,
+}: {
+  spot: Spot;
+  day: DayGroup;
+  tides: TidePoint[];
+}) {
   const verdict = evaluateDay({ spot, hours: day.hours, thresholds: INTERMEDIATE_THRESHOLDS });
   const rideableCount = day.hours.filter((h) =>
     isHourRideable(h, spot, INTERMEDIATE_THRESHOLDS),
@@ -179,6 +199,8 @@ function DaySection({ spot, day }: { spot: Spot; day: DayGroup }) {
         </View>
         <VerdictPill verdict={verdict} />
       </View>
+
+      {tides.length > 0 ? <TideRow tides={tides} /> : null}
 
       <View style={styles.table}>
         <View style={[styles.tableRow, styles.tableHeader]}>
@@ -222,6 +244,25 @@ function HourRow({ hour, spot }: { hour: HourlyForecast; spot: Spot }) {
           ]}
         />
       </View>
+    </View>
+  );
+}
+
+function TideRow({ tides }: { tides: TidePoint[] }) {
+  return (
+    <View style={styles.tideRow}>
+      {tides.map((t) => (
+        <View key={t.at} style={styles.tideChip}>
+          <Text style={t.type === "high" ? styles.tideArrowHigh : styles.tideArrowLow}>
+            {t.type === "high" ? "▲" : "▼"}
+          </Text>
+          <Text style={styles.tideTime}>{formatHourLabel(t.at)}</Text>
+          <Text style={styles.tideHeight}>
+            {t.heightCm >= 0 ? "+" : ""}
+            {t.heightCm} cm
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -294,6 +335,22 @@ const styles = StyleSheet.create({
   dayHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   dayTitle: { fontSize: 16, fontWeight: "600" },
   daySub: { fontSize: 11, color: "#6b7280", marginTop: 2 },
+  tideRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  tideChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#e5e5e5",
+    borderRadius: 6,
+    backgroundColor: "#fff",
+  },
+  tideArrowHigh: { color: "#0369a1", fontSize: 11 },
+  tideArrowLow: { color: "#b45309", fontSize: 11 },
+  tideTime: { fontSize: 11, fontVariant: ["tabular-nums"] },
+  tideHeight: { fontSize: 10, color: "#9ca3af", fontVariant: ["tabular-nums"] },
   table: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#e5e5e5",

@@ -2,7 +2,11 @@
 // and @windsiren/supabase to @windsiren/shared's decision engine. No React,
 // no DOM/RN APIs — consumable from server and client alike.
 
-import { KnmiObservationSource, OpenMeteoForecastSource } from "@windsiren/providers";
+import {
+  KnmiObservationSource,
+  OpenMeteoForecastSource,
+  RijkswaterstaatTideSource,
+} from "@windsiren/providers";
 import {
   evaluateDay,
   INTERMEDIATE_THRESHOLDS,
@@ -10,6 +14,7 @@ import {
   type HourlyForecast,
   type Observation,
   type Spot,
+  type TidePoint,
   type Verdict,
 } from "@windsiren/shared";
 import type { SpotRow } from "@windsiren/supabase";
@@ -27,6 +32,7 @@ export type DayGroup = {
 
 // Single forecaster reused across calls. Stateless apart from injected fetch.
 const forecaster = new OpenMeteoForecastSource();
+const tideSource = new RijkswaterstaatTideSource();
 
 export function dbRowToSpot(row: SpotRow): Spot {
   return {
@@ -67,6 +73,19 @@ export type LiveObservation = {
 // station. Returns null when the spot has no knmi_station_id configured,
 // or when the fetch/parse fails — callers render a graceful "not available"
 // state rather than surfacing errors to users.
+// Fetches astronomical tide extremes (high/low events) for a spot on a
+// given NL-local date. Returns [] when the spot has no rws_tide_station_id
+// (IJsselmeer spots, or un-mapped spots), or when the fetch fails. Never
+// throws — callers render "no tide data" gracefully.
+export async function fetchDailyTides(spot: Spot, dateKey: string): Promise<TidePoint[]> {
+  if (!spot.rwsTideStationId) return [];
+  try {
+    return await tideSource.fetchDailyEvents(spot.rwsTideStationId, dateKey);
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchLiveObservation(
   spot: Spot,
   apiKey: string | undefined,

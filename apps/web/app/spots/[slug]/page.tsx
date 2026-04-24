@@ -8,12 +8,14 @@ import {
   msToKnots,
   type HourlyForecast,
   type Spot,
+  type TidePoint,
   type Verdict,
 } from "@windsiren/shared";
 import { supabase } from "@/lib/supabase";
 import {
   dbRowToSpot,
   fetch3DayForecast,
+  fetchDailyTides,
   fetchLiveObservation,
   formatDayLabel,
   formatHourLabel,
@@ -62,6 +64,9 @@ export default async function SpotDetailPage({
   const forecastError = forecastResult.ok ? null : forecastResult.error;
   const days = groupHoursByLocalDay(hours).slice(0, 3);
 
+  // Once we know the three local-date keys, fetch tide events for each in parallel.
+  const tidesPerDay = await Promise.all(days.map((d) => fetchDailyTides(spot, d.dateKey)));
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
       <Link
@@ -103,8 +108,13 @@ export default async function SpotDetailPage({
         <p className="text-zinc-500">No forecast data available.</p>
       ) : (
         <div className="space-y-10">
-          {days.map((day) => (
-            <DaySection key={day.dateKey} spot={spot} day={day} />
+          {days.map((day, i) => (
+            <DaySection
+              key={day.dateKey}
+              spot={spot}
+              day={day}
+              tides={tidesPerDay[i] ?? []}
+            />
           ))}
         </div>
       )}
@@ -155,7 +165,15 @@ function msToKn(ms: number): string {
   return msToKnots(ms).toFixed(0);
 }
 
-function DaySection({ spot, day }: { spot: Spot; day: DayGroup }) {
+function DaySection({
+  spot,
+  day,
+  tides,
+}: {
+  spot: Spot;
+  day: DayGroup;
+  tides: TidePoint[];
+}) {
   const verdict = evaluateDay({ spot, hours: day.hours, thresholds: INTERMEDIATE_THRESHOLDS });
   const rideableCount = day.hours.filter((h) => isHourRideable(h, spot, INTERMEDIATE_THRESHOLDS))
     .length;
@@ -171,6 +189,8 @@ function DaySection({ spot, day }: { spot: Spot; day: DayGroup }) {
         </div>
         <VerdictBadge verdict={verdict} />
       </div>
+
+      {tides.length > 0 ? <TideRow tides={tides} /> : null}
 
       <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-sm">
@@ -221,6 +241,28 @@ function HourRow({ hour, spot }: { hour: HourlyForecast; spot: Spot }) {
         )}
       </td>
     </tr>
+  );
+}
+
+function TideRow({ tides }: { tides: TidePoint[] }) {
+  return (
+    <div className="mb-3 flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
+      {tides.map((t) => (
+        <span
+          key={t.at}
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 font-mono dark:border-zinc-800 dark:bg-zinc-950"
+        >
+          <span className={t.type === "high" ? "text-sky-600 dark:text-sky-400" : "text-amber-600 dark:text-amber-400"}>
+            {t.type === "high" ? "▲" : "▼"}
+          </span>
+          <span>{formatHourLabel(t.at)}</span>
+          <span className="text-zinc-400">
+            {t.heightCm >= 0 ? "+" : ""}
+            {t.heightCm} cm
+          </span>
+        </span>
+      ))}
+    </div>
   );
 }
 
