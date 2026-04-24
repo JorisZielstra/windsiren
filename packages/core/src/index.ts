@@ -7,3 +7,4 @@ export * from "./rsvps";
 export * from "./profiles";
 export * from "./feed";
 export * from "./likes";
+export * from "./photos";

@@ -382,6 +382,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      session_photos: {
+        Row: {
+          id: string;
+          session_id: string;
+          storage_path: string;
+          ordinal: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          storage_path: string;
+          ordinal: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          storage_path?: string;
+          ordinal?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -410,3 +434,4 @@ export type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row
 export type FollowRow = Database["public"]["Tables"]["follows"]["Row"];
 export type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
 export type LikeRow = Database["public"]["Tables"]["likes"]["Row"];
+export type SessionPhotoRow = Database["public"]["Tables"]["session_photos"]["Row"];
