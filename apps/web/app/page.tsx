@@ -62,12 +62,20 @@ export default async function Home() {
             Map →
           </Link>
           {user ? (
-            <Link
-              href="/profile"
-              className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
-            >
-              Profile
-            </Link>
+            <>
+              <Link
+                href="/feed"
+                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+              >
+                Feed
+              </Link>
+              <Link
+                href="/profile"
+                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+              >
+                Profile
+              </Link>
+            </>
           ) : (
             <Link
               href="/auth/sign-in"

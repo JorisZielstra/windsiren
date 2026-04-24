@@ -71,6 +71,13 @@ export default function SpotsListScreen() {
                   <Text style={styles.headerBtn}>Map</Text>
                 </Pressable>
               </Link>
+              {user ? (
+                <Link href="/feed" asChild>
+                  <Pressable>
+                    <Text style={styles.headerBtn}>Feed</Text>
+                  </Pressable>
+                </Link>
+              ) : null}
               <Link href={user ? "/profile" : "/sign-in"} asChild>
                 <Pressable>
                   <Text style={styles.headerBtn}>{user ? "Profile" : "Sign in"}</Text>
