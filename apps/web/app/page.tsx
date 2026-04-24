@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { dbRowToSpot, fetchTodayVerdict, peakWindMs } from "@windsiren/core";
 import { msToKnots } from "@windsiren/shared";
 
@@ -8,6 +9,11 @@ import { msToKnots } from "@windsiren/shared";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  const authed = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authed.auth.getUser();
+
   const { data: rows, error } = await supabase
     .from("spots")
     .select("*")
@@ -38,12 +44,29 @@ export default async function Home() {
             {withVerdicts.length} curated NL kitesurf spots · today&apos;s forecast · intermediate preset
           </p>
         </div>
-        <Link
-          href="/map"
-          className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
-        >
-          Map →
-        </Link>
+        <div className="mt-2 flex items-center gap-2">
+          <Link
+            href="/map"
+            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+          >
+            Map →
+          </Link>
+          {user ? (
+            <Link
+              href="/profile"
+              className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+            >
+              Profile
+            </Link>
+          ) : (
+            <Link
+              href="/auth/sign-in"
+              className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Sign in
+            </Link>
+          )}
+        </div>
       </header>
 
       <ul className="space-y-2">

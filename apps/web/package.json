@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.2",
     "@windsiren/core": "workspace:*",
     "@windsiren/providers": "workspace:*",
     "@windsiren/shared": "workspace:*",
