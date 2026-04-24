@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type TypedSupabaseClient } from "@windsiren/supabase";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -10,4 +11,11 @@ if (!url || !key) {
   );
 }
 
-export const supabase: TypedSupabaseClient = createClient(url, key);
+export const supabase: TypedSupabaseClient = createClient(url, key, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false, // no URL fragment auth on native
+  },
+});

@@ -16,9 +16,11 @@ import {
   peakWindMs,
   type SpotWithVerdict,
 } from "@windsiren/core";
+import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 
 export default function SpotsListScreen() {
+  const { user } = useAuth();
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,11 +55,18 @@ export default function SpotsListScreen() {
         options={{
           title: "WindSiren",
           headerRight: () => (
-            <Link href="/map" asChild>
-              <Pressable>
-                <Text style={styles.headerBtn}>Map</Text>
-              </Pressable>
-            </Link>
+            <View style={styles.headerRight}>
+              <Link href="/map" asChild>
+                <Pressable>
+                  <Text style={styles.headerBtn}>Map</Text>
+                </Pressable>
+              </Link>
+              <Link href={user ? "/profile" : "/sign-in"} asChild>
+                <Pressable>
+                  <Text style={styles.headerBtn}>{user ? "Profile" : "Sign in"}</Text>
+                </Pressable>
+              </Link>
+            </View>
           ),
         }}
       />
@@ -149,6 +158,7 @@ const styles = StyleSheet.create({
   },
   subtitle: { fontSize: 13, color: "#6b7280" },
   headerBtn: { fontSize: 14, color: "#0369a1", fontWeight: "600", paddingHorizontal: 8 },
+  headerRight: { flexDirection: "row", alignItems: "center" },
   loader: { marginTop: 48 },
   errorBox: {
     margin: 16,
