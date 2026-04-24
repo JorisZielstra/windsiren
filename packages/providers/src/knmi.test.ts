@@ -86,7 +86,7 @@ describe("KnmiObservationSource", () => {
     const url = fetchImpl.mock.calls[0]?.[0] as string;
     expect(url).toContain("api.dataplatform.knmi.nl/edr/v1");
     expect(url).toContain("10-minute-in-situ-meteorological-observations");
-    expect(url).toContain("/locations/06225");
+    expect(url).toContain("/locations/0-20000-0-06225");
     expect(url).toContain("parameter-name=ff%2Cdd%2Cgff%2Cta%2Cps");
     expect(url).toMatch(/datetime=\d{4}-\d{2}-\d{2}T\d{2}%3A\d{2}%3A\d{2}Z%2F\d{4}-\d{2}-\d{2}T\d{2}%3A\d{2}%3A\d{2}Z/);
   });
@@ -156,6 +156,46 @@ describe("KnmiObservationSource", () => {
     const source = new KnmiObservationSource("test-key", fetchImpl as unknown as typeof fetch);
 
     await expect(source.fetchLatest("06225")).rejects.toThrow(/no observations/i);
+  });
+
+  test("passes through an already-WIGOS-prefixed station ID unchanged", async () => {
+    const fetchImpl = mockFetch(sampleCoverageJson());
+    const source = new KnmiObservationSource("test-key", fetchImpl as unknown as typeof fetch);
+    await source.fetchLatest("0-20000-0-06225");
+
+    const url = fetchImpl.mock.calls[0]?.[0] as string;
+    // Should NOT double-prefix
+    expect(url).toContain("/locations/0-20000-0-06225");
+    expect(url).not.toContain("/locations/0-20000-0-0-20000-0-");
+  });
+
+  test("unwraps a CoverageCollection (KNMI's actual production shape)", async () => {
+    const collection: CoverageJsonResponse = {
+      type: "CoverageCollection",
+      coverages: [
+        {
+          type: "Coverage",
+          domain: { axes: { t: { values: ["2026-04-24T07:10:00Z"] } } },
+          ranges: {
+            ff: { values: [4.5] },
+            gff: { values: [6.2] },
+            dd: { values: [230] },
+            ta: { values: [8.1] },
+            ps: { values: [1018] },
+          },
+        },
+      ],
+    };
+    const fetchImpl = mockFetch(collection);
+    const source = new KnmiObservationSource("test-key", fetchImpl as unknown as typeof fetch);
+
+    const obs = await source.fetchLatest("06225");
+    expect(obs.observedAt).toBe("2026-04-24T07:10:00Z");
+    expect(obs.windSpeedMs).toBe(4.5);
+    expect(obs.gustMs).toBe(6.2);
+    expect(obs.windDirectionDeg).toBe(230);
+    expect(obs.airTempC).toBe(8.1);
+    expect(obs.pressureHpa).toBe(1018);
   });
 
   test("listStationsNear returns [] (deferred to v1)", async () => {

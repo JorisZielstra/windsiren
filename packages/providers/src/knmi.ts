@@ -20,9 +20,12 @@ import type { ObservationSource, Observation, StationInfo } from "@windsiren/sha
 const KNMI_BASE = "https://api.dataplatform.knmi.nl/edr/v1";
 const COLLECTION = "10-minute-in-situ-meteorological-observations";
 
-// CoverageJSON response shape (only the fields we consume).
-export type CoverageJsonResponse = {
-  type: string;
+// CoverageJSON shapes we consume. KNMI returns EITHER:
+//   - type: "Coverage" (single) with domain + ranges at the root, or
+//   - type: "CoverageCollection" with a `coverages: [Coverage]` array
+// We normalize by unwrapping the first coverage from a collection.
+type Coverage = {
+  type?: string;
   domain?: {
     axes?: {
       t?: { values: string[] };
@@ -37,6 +40,10 @@ export type CoverageJsonResponse = {
       values: (number | null)[];
     }
   >;
+};
+
+export type CoverageJsonResponse = Coverage & {
+  coverages?: Coverage[];
 };
 
 export class KnmiObservationSource implements ObservationSource {
@@ -63,7 +70,13 @@ export class KnmiObservationSource implements ObservationSource {
     const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
     const datetime = `${toRfc3339(thirtyMinAgo)}/${toRfc3339(now)}`;
 
-    const url = new URL(`${KNMI_BASE}/collections/${COLLECTION}/locations/${stationId}`);
+    // KNMI EDR locations use WIGOS identifiers: "0-20000-0-<5-digit-code>".
+    // We store the short 5-digit form (e.g. "06225") in the DB for brevity
+    // and add the prefix here transparently. Already-prefixed IDs pass through.
+    const wigosId = stationId.startsWith("0-20000-0-")
+      ? stationId
+      : `0-20000-0-${stationId}`;
+    const url = new URL(`${KNMI_BASE}/collections/${COLLECTION}/locations/${wigosId}`);
     url.searchParams.set("datetime", datetime);
     url.searchParams.set("parameter-name", "ff,dd,gff,ta,ps");
 
@@ -91,13 +104,21 @@ export class KnmiObservationSource implements ObservationSource {
   }
 
   private extractLatest(data: CoverageJsonResponse, stationId: string): Observation {
-    const times = data.domain?.axes?.t?.values ?? [];
+    // KNMI wraps location queries in a CoverageCollection; single-location
+    // queries have exactly one coverage inside. Fall back to root-level
+    // domain/ranges in case a future endpoint returns a bare Coverage.
+    const coverage: Coverage =
+      data.type === "CoverageCollection" && data.coverages?.[0]
+        ? data.coverages[0]
+        : data;
+
+    const times = coverage.domain?.axes?.t?.values ?? [];
     if (times.length === 0) {
       throw new Error(`KNMI returned no observations for station ${stationId}`);
     }
 
     const pick = (param: string): number | null => {
-      const arr = data.ranges?.[param]?.values;
+      const arr = coverage.ranges?.[param]?.values;
       if (!arr || arr.length === 0) return null;
       const v = arr[arr.length - 1];
       return typeof v === "number" ? v : null;
