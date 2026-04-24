@@ -24,6 +24,8 @@ export type Database = {
           quiet_hours_start: string | null;
           quiet_hours_end: string | null;
           locale: string;
+          avatar_url: string | null;
+          bio: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -37,6 +39,8 @@ export type Database = {
           quiet_hours_start?: string | null;
           quiet_hours_end?: string | null;
           locale?: string;
+          avatar_url?: string | null;
+          bio?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -50,6 +54,8 @@ export type Database = {
           quiet_hours_start?: string | null;
           quiet_hours_end?: string | null;
           locale?: string;
+          avatar_url?: string | null;
+          bio?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -307,6 +313,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      follows: {
+        Row: {
+          follower_id: string;
+          followee_id: string;
+          created_at: string;
+        };
+        Insert: {
+          follower_id: string;
+          followee_id: string;
+          created_at?: string;
+        };
+        Update: {
+          follower_id?: string;
+          followee_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          spot_id: string;
+          session_date: string;
+          duration_minutes: number;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          spot_id: string;
+          session_date: string;
+          duration_minutes: number;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          spot_id?: string;
+          session_date?: string;
+          duration_minutes?: number;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -332,3 +389,5 @@ export type ForecastRow = Database["public"]["Tables"]["forecasts"]["Row"];
 export type ObservationRow = Database["public"]["Tables"]["observations"]["Row"];
 export type TideEventRow = Database["public"]["Tables"]["tide_events"]["Row"];
 export type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
+export type FollowRow = Database["public"]["Tables"]["follows"]["Row"];
+export type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
