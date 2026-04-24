@@ -31,11 +31,19 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold tracking-tight">WindSiren</h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          {withVerdicts.length} curated NL kitesurf spots · today&apos;s forecast · intermediate preset
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">WindSiren</h1>
+          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+            {withVerdicts.length} curated NL kitesurf spots · today&apos;s forecast · intermediate preset
+          </p>
+        </div>
+        <Link
+          href="/map"
+          className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+        >
+          Map →
+        </Link>
       </header>
 
       <ul className="space-y-2">

@@ -1,4 +1,4 @@
-import { Link, useFocusEffect } from "expo-router";
+import { Link, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -49,6 +49,18 @@ export default function SpotsListScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
+      <Stack.Screen
+        options={{
+          title: "WindSiren",
+          headerRight: () => (
+            <Link href="/map" asChild>
+              <Pressable>
+                <Text style={styles.headerBtn}>Map</Text>
+              </Pressable>
+            </Link>
+          ),
+        }}
+      />
       <View style={styles.header}>
         <Text style={styles.subtitle}>
           {error
@@ -136,6 +148,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#e5e5e5",
   },
   subtitle: { fontSize: 13, color: "#6b7280" },
+  headerBtn: { fontSize: 14, color: "#0369a1", fontWeight: "600", paddingHorizontal: 8 },
   loader: { marginTop: 48 },
   errorBox: {
     margin: 16,

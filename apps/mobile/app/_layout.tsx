@@ -13,6 +13,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ title: "WindSiren" }} />
         <Stack.Screen name="spots/[slug]" options={{ title: "" }} />
+        <Stack.Screen name="map" options={{ title: "Map" }} />
       </Stack>
       <StatusBar style="auto" />
     </SafeAreaProvider>
