@@ -11,10 +11,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   fetchPersonalFeed,
+  getLikeCounts,
+  getLikedSessionIds,
   getPublicProfiles,
   type FeedItem,
   type PublicProfile,
 } from "@windsiren/core";
+import { LikeButton } from "../components/LikeButton";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 
@@ -22,6 +25,8 @@ type Enriched = {
   items: FeedItem[];
   profiles: Map<string, PublicProfile>;
   spots: Map<string, { name: string; slug: string }>;
+  likeCounts: Map<string, number>;
+  likedIds: Set<string>;
 };
 
 export default function FeedScreen() {
@@ -46,15 +51,18 @@ export default function FeedScreen() {
         const items = await fetchPersonalFeed(supabase, user.id, { limit: 50, includeSelf: true });
         const authorIds = Array.from(new Set(items.map((i) => i.userId)));
         const spotIds = Array.from(new Set(items.map((i) => i.spotId)));
-        const [profiles, spotRes] = await Promise.all([
+        const sessionIds = items.filter((i) => i.type === "session").map((i) => i.session.id);
+        const [profiles, spotRes, likeCounts, likedIds] = await Promise.all([
           getPublicProfiles(supabase, authorIds),
           spotIds.length > 0
             ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
             : Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
+          getLikeCounts(supabase, sessionIds),
+          getLikedSessionIds(supabase, user.id, sessionIds),
         ]);
         const spots = new Map<string, { name: string; slug: string }>();
         for (const s of spotRes.data ?? []) spots.set(s.id, { name: s.name, slug: s.slug });
-        if (!cancelled) setLoaded({ items, profiles, spots });
+        if (!cancelled) setLoaded({ items, profiles, spots, likeCounts, likedIds });
       })();
       return () => {
         cancelled = true;
@@ -89,6 +97,10 @@ export default function FeedScreen() {
               item={item}
               authorName={loaded.profiles.get(item.userId)?.display_name ?? "Someone"}
               spot={loaded.spots.get(item.spotId)}
+              likeCount={
+                item.type === "session" ? loaded.likeCounts.get(item.session.id) ?? 0 : 0
+              }
+              liked={item.type === "session" && loaded.likedIds.has(item.session.id)}
             />
           )}
         />
@@ -101,10 +113,14 @@ function Row({
   item,
   authorName,
   spot,
+  likeCount,
+  liked,
 }: {
   item: FeedItem;
   authorName: string;
   spot: { name: string; slug: string } | undefined;
+  likeCount: number;
+  liked: boolean;
 }) {
   if (item.type === "session") {
     const s = item.session;
@@ -126,6 +142,9 @@ function Row({
           · {relativeTime(item.createdAt)}
         </Text>
         {s.notes ? <Text style={styles.rowNotes}>{s.notes}</Text> : null}
+        <View style={styles.likeRow}>
+          <LikeButton sessionId={s.id} initialCount={likeCount} initialLiked={liked} />
+        </View>
       </View>
     );
   }
@@ -195,6 +214,7 @@ const styles = StyleSheet.create({
   rowText: { fontSize: 14, color: "#18181b", lineHeight: 20 },
   rowTimestamp: { marginTop: 4, fontSize: 11, color: "#6b7280" },
   rowNotes: { marginTop: 8, fontSize: 13, color: "#374151", lineHeight: 18 },
+  likeRow: { marginTop: 8 },
   link: { color: "#0369a1", fontWeight: "600" },
   mono: { fontVariant: ["tabular-nums"] },
   semibold: { fontWeight: "600" },

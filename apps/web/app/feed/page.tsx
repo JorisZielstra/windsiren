@@ -2,9 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   fetchPersonalFeed,
+  getLikeCounts,
+  getLikedSessionIds,
   getPublicProfiles,
   type FeedItem,
 } from "@windsiren/core";
+import { LikeButton } from "@/components/LikeButton";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +21,18 @@ export default async function FeedPage() {
 
   const items = await fetchPersonalFeed(supabase, user.id, { limit: 50, includeSelf: true });
 
-  // Resolve author profiles + spot names in one round-trip each.
+  // Resolve author profiles + spot names + like state in batched round-trips.
   const authorIds = Array.from(new Set(items.map((i) => i.userId)));
   const spotIds = Array.from(new Set(items.map((i) => i.spotId)));
-  const [profiles, spotRes] = await Promise.all([
+  const sessionIds = items.filter((i) => i.type === "session").map((i) => i.session.id);
+
+  const [profiles, spotRes, likeCounts, likedSet] = await Promise.all([
     getPublicProfiles(supabase, authorIds),
     spotIds.length > 0
       ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
       : Promise.resolve({ data: [] }),
+    getLikeCounts(supabase, sessionIds),
+    getLikedSessionIds(supabase, user.id, sessionIds),
   ]);
   const spotMap = new Map<string, { name: string; slug: string }>();
   for (const s of spotRes.data ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
@@ -55,6 +62,11 @@ export default async function FeedPage() {
               item={item}
               authorName={profiles.get(item.userId)?.display_name ?? "Someone"}
               spot={spotMap.get(item.spotId)}
+              viewerId={user.id}
+              likeCount={
+                item.type === "session" ? likeCounts.get(item.session.id) ?? 0 : 0
+              }
+              liked={item.type === "session" && likedSet.has(item.session.id)}
             />
           ))}
         </ul>
@@ -71,10 +83,16 @@ function FeedRow({
   item,
   authorName,
   spot,
+  viewerId,
+  likeCount,
+  liked,
 }: {
   item: FeedItem;
   authorName: string;
   spot: { name: string; slug: string } | undefined;
+  viewerId: string;
+  likeCount: number;
+  liked: boolean;
 }) {
   const spotLabel = spot ? (
     <Link href={`/spots/${spot.slug}`} className="font-medium hover:underline">
@@ -110,6 +128,14 @@ function FeedRow({
         {s.notes ? (
           <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
         ) : null}
+        <div className="mt-3">
+          <LikeButton
+            sessionId={s.id}
+            initialCount={likeCount}
+            initialLiked={liked}
+            viewerId={viewerId}
+          />
+        </div>
       </li>
     );
   }

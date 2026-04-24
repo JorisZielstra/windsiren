@@ -7,12 +7,15 @@ import {
   createRsvp,
   createSession,
   deleteRsvp,
+  getLikeCounts,
+  getLikedSessionIds,
   getPublicProfiles,
   isUserRsvpdForDay,
   listSessionsForSpot,
   type PublicProfile,
 } from "@windsiren/core";
 import type { SessionRow } from "@windsiren/supabase";
+import { LikeButton } from "@/components/LikeButton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Props = {
@@ -44,6 +47,8 @@ export function SpotSocial({ spotId }: Props) {
   const [profiles, setProfiles] = useState<Map<string, PublicProfile>>(new Map());
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [myRsvpByDate, setMyRsvpByDate] = useState<Record<string, boolean>>({});
+  const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [showComposer, setShowComposer] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -63,9 +68,17 @@ export function SpotSocial({ spotId }: Props) {
     setSessions(sessionsList);
     setCounts(dayCounts);
 
-    // Profile lookup for session authors
+    // Profile lookup for session authors + like state for the listed sessions
     const authorIds = Array.from(new Set(sessionsList.map((s) => s.user_id)));
-    setProfiles(await getPublicProfiles(supabase, authorIds));
+    const sessionIds = sessionsList.map((s) => s.id);
+    const [authorProfiles, sessionLikeCounts, viewerLikedIds] = await Promise.all([
+      getPublicProfiles(supabase, authorIds),
+      getLikeCounts(supabase, sessionIds),
+      user ? getLikedSessionIds(supabase, user.id, sessionIds) : Promise.resolve(new Set<string>()),
+    ]);
+    setProfiles(authorProfiles);
+    setLikeCounts(sessionLikeCounts);
+    setLikedIds(viewerLikedIds);
 
     // My RSVP state for each day
     if (user) {
@@ -201,6 +214,14 @@ export function SpotSocial({ spotId }: Props) {
                   {s.notes ? (
                     <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
                   ) : null}
+                  <div className="mt-2">
+                    <LikeButton
+                      sessionId={s.id}
+                      initialCount={likeCounts.get(s.id) ?? 0}
+                      initialLiked={likedIds.has(s.id)}
+                      viewerId={userId}
+                    />
+                  </div>
                 </li>
               );
             })}

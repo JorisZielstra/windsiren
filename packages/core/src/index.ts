@@ -6,3 +6,4 @@ export * from "./sessions";
 export * from "./rsvps";
 export * from "./profiles";
 export * from "./feed";
+export * from "./likes";

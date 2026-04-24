@@ -14,6 +14,8 @@ import {
   createRsvp,
   createSession,
   deleteRsvp,
+  getLikeCounts,
+  getLikedSessionIds,
   getPublicProfiles,
   isUserRsvpdForDay,
   listSessionsForSpot,
@@ -22,6 +24,7 @@ import {
 import type { SessionRow } from "@windsiren/supabase";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
+import { LikeButton } from "./LikeButton";
 
 type DayOffset = 0 | 1 | 2;
 
@@ -46,6 +49,8 @@ export function SpotSocial({ spotId }: { spotId: string }) {
   const [profiles, setProfiles] = useState<Map<string, PublicProfile>>(new Map());
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [myRsvpByDate, setMyRsvpByDate] = useState<Record<string, boolean>>({});
+  const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [showComposer, setShowComposer] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -61,7 +66,15 @@ export function SpotSocial({ spotId }: { spotId: string }) {
     setCounts(dayCounts);
 
     const authorIds = Array.from(new Set(sessionsList.map((s) => s.user_id)));
-    setProfiles(await getPublicProfiles(supabase, authorIds));
+    const sessionIds = sessionsList.map((s) => s.id);
+    const [authorProfiles, sessionLikeCounts, viewerLikedIds] = await Promise.all([
+      getPublicProfiles(supabase, authorIds),
+      getLikeCounts(supabase, sessionIds),
+      user ? getLikedSessionIds(supabase, user.id, sessionIds) : Promise.resolve(new Set<string>()),
+    ]);
+    setProfiles(authorProfiles);
+    setLikeCounts(sessionLikeCounts);
+    setLikedIds(viewerLikedIds);
 
     if (user) {
       const checks = await Promise.all(
@@ -159,6 +172,13 @@ export function SpotSocial({ spotId }: { spotId: string }) {
                 })}
               </Text>
               {s.notes ? <Text style={styles.sessionNotes}>{s.notes}</Text> : null}
+              <View style={{ marginTop: 8 }}>
+                <LikeButton
+                  sessionId={s.id}
+                  initialCount={likeCounts.get(s.id) ?? 0}
+                  initialLiked={likedIds.has(s.id)}
+                />
+              </View>
             </View>
           );
         })
