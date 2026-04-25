@@ -3,10 +3,13 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   getFollowCounts,
+  getPhotosForSessions,
+  getPhotoPublicUrl,
   getPublicProfile,
   listSessionsForUser,
   listUserRsvps,
 } from "@windsiren/core";
+import { PhotoGrid } from "@/components/PhotoGrid";
 import { FollowButton } from "./FollowButton";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +42,17 @@ export default async function UserProfilePage({
       .select("id, name, slug")
       .in("id", spotIds);
     for (const s of spotRows ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
+  }
+
+  // Photos per session
+  const sessionIds = sessions.map((s) => s.id);
+  const photosBySession = await getPhotosForSessions(supabase, sessionIds);
+  const photoUrlsBySession = new Map<string, string[]>();
+  for (const [sid, photos] of photosBySession) {
+    photoUrlsBySession.set(
+      sid,
+      photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)),
+    );
   }
 
   // Filter RSVPs to today-and-future (upcoming)
@@ -157,6 +171,7 @@ export default async function UserProfilePage({
                   {s.notes ? (
                     <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
                   ) : null}
+                  <PhotoGrid urls={photoUrlsBySession.get(s.id) ?? []} />
                 </li>
               );
             })}

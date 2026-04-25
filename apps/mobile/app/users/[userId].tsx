@@ -12,6 +12,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   followUser,
   getFollowCounts,
+  getPhotosForSessions,
+  getPhotoPublicUrl,
   getPublicProfile,
   isFollowing,
   listSessionsForUser,
@@ -21,6 +23,7 @@ import {
   type PublicProfile,
 } from "@windsiren/core";
 import type { RsvpRow, SessionRow } from "@windsiren/supabase";
+import { PhotoGrid } from "../../components/PhotoGrid";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
@@ -30,6 +33,7 @@ type Loaded = {
   sessions: SessionRow[];
   upcomingRsvps: RsvpRow[];
   spotsById: Map<string, { name: string; slug: string }>;
+  photoUrls: Map<string, string[]>;
 };
 
 export default function UserProfileScreen() {
@@ -71,7 +75,14 @@ export default function UserProfileScreen() {
         const today = new Date().toISOString().slice(0, 10);
         const upcomingRsvps = rsvps.filter((r) => r.planned_date >= today);
 
-        if (!cancelled) setLoaded({ profile, counts, sessions, upcomingRsvps, spotsById });
+        const photosBySession = await getPhotosForSessions(supabase, sessions.map((s) => s.id));
+        const photoUrls = new Map<string, string[]>();
+        for (const [sid, photos] of photosBySession) {
+          photoUrls.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
+        }
+
+        if (!cancelled)
+          setLoaded({ profile, counts, sessions, upcomingRsvps, spotsById, photoUrls });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -180,6 +191,7 @@ export default function UserProfileScreen() {
                 })}
               </Text>
               {item.notes ? <Text style={styles.rowNotes}>{item.notes}</Text> : null}
+              <PhotoGrid urls={loaded.photoUrls.get(item.id) ?? []} />
             </View>
           );
         }}

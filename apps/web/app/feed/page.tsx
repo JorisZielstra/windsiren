@@ -4,10 +4,13 @@ import {
   fetchPersonalFeed,
   getLikeCounts,
   getLikedSessionIds,
+  getPhotosForSessions,
+  getPhotoPublicUrl,
   getPublicProfiles,
   type FeedItem,
 } from "@windsiren/core";
 import { LikeButton } from "@/components/LikeButton";
+import { PhotoGrid } from "@/components/PhotoGrid";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -26,16 +29,26 @@ export default async function FeedPage() {
   const spotIds = Array.from(new Set(items.map((i) => i.spotId)));
   const sessionIds = items.filter((i) => i.type === "session").map((i) => i.session.id);
 
-  const [profiles, spotRes, likeCounts, likedSet] = await Promise.all([
+  const [profiles, spotRes, likeCounts, likedSet, photosBySession] = await Promise.all([
     getPublicProfiles(supabase, authorIds),
     spotIds.length > 0
       ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
       : Promise.resolve({ data: [] }),
     getLikeCounts(supabase, sessionIds),
     getLikedSessionIds(supabase, user.id, sessionIds),
+    getPhotosForSessions(supabase, sessionIds),
   ]);
   const spotMap = new Map<string, { name: string; slug: string }>();
   for (const s of spotRes.data ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
+
+  // Pre-compute public URLs server-side so client renders immediately.
+  const photoUrlsBySession = new Map<string, string[]>();
+  for (const [sid, photos] of photosBySession) {
+    photoUrlsBySession.set(
+      sid,
+      photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)),
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -67,6 +80,9 @@ export default async function FeedPage() {
                 item.type === "session" ? likeCounts.get(item.session.id) ?? 0 : 0
               }
               liked={item.type === "session" && likedSet.has(item.session.id)}
+              photoUrls={
+                item.type === "session" ? photoUrlsBySession.get(item.session.id) ?? [] : []
+              }
             />
           ))}
         </ul>
@@ -86,6 +102,7 @@ function FeedRow({
   viewerId,
   likeCount,
   liked,
+  photoUrls,
 }: {
   item: FeedItem;
   authorName: string;
@@ -93,6 +110,7 @@ function FeedRow({
   viewerId: string;
   likeCount: number;
   liked: boolean;
+  photoUrls: string[];
 }) {
   const spotLabel = spot ? (
     <Link href={`/spots/${spot.slug}`} className="font-medium hover:underline">
@@ -128,6 +146,7 @@ function FeedRow({
         {s.notes ? (
           <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
         ) : null}
+        <PhotoGrid urls={photoUrls} />
         <div className="mt-3">
           <LikeButton
             sessionId={s.id}

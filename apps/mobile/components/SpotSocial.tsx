@@ -19,6 +19,8 @@ import {
   deleteRsvp,
   getLikeCounts,
   getLikedSessionIds,
+  getPhotosForSessions,
+  getPhotoPublicUrl,
   getPublicProfiles,
   isUserRsvpdForDay,
   listSessionsForSpot,
@@ -30,6 +32,7 @@ import type { SessionRow } from "@windsiren/supabase";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 import { LikeButton } from "./LikeButton";
+import { PhotoGrid } from "./PhotoGrid";
 
 type DayOffset = 0 | 1 | 2;
 
@@ -56,6 +59,7 @@ export function SpotSocial({ spotId }: { spotId: string }) {
   const [myRsvpByDate, setMyRsvpByDate] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [photoUrls, setPhotoUrls] = useState<Map<string, string[]>>(new Map());
   const [showComposer, setShowComposer] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -72,14 +76,20 @@ export function SpotSocial({ spotId }: { spotId: string }) {
 
     const authorIds = Array.from(new Set(sessionsList.map((s) => s.user_id)));
     const sessionIds = sessionsList.map((s) => s.id);
-    const [authorProfiles, sessionLikeCounts, viewerLikedIds] = await Promise.all([
+    const [authorProfiles, sessionLikeCounts, viewerLikedIds, sessionPhotos] = await Promise.all([
       getPublicProfiles(supabase, authorIds),
       getLikeCounts(supabase, sessionIds),
       user ? getLikedSessionIds(supabase, user.id, sessionIds) : Promise.resolve(new Set<string>()),
+      getPhotosForSessions(supabase, sessionIds),
     ]);
     setProfiles(authorProfiles);
     setLikeCounts(sessionLikeCounts);
     setLikedIds(viewerLikedIds);
+    const urlMap = new Map<string, string[]>();
+    for (const [sid, photos] of sessionPhotos) {
+      urlMap.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
+    }
+    setPhotoUrls(urlMap);
 
     if (user) {
       const checks = await Promise.all(
@@ -177,6 +187,7 @@ export function SpotSocial({ spotId }: { spotId: string }) {
                 })}
               </Text>
               {s.notes ? <Text style={styles.sessionNotes}>{s.notes}</Text> : null}
+              <PhotoGrid urls={photoUrls.get(s.id) ?? []} />
               <View style={{ marginTop: 8 }}>
                 <LikeButton
                   sessionId={s.id}

@@ -21,6 +21,7 @@ import {
 import type { SessionPhotoRow } from "@windsiren/supabase";
 import type { SessionRow } from "@windsiren/supabase";
 import { LikeButton } from "@/components/LikeButton";
+import { PhotoGrid } from "@/components/PhotoGrid";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Props = {
@@ -54,6 +55,7 @@ export function SpotSocial({ spotId }: Props) {
   const [myRsvpByDate, setMyRsvpByDate] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [photoUrlsBySession, setPhotoUrlsBySession] = useState<Map<string, string[]>>(new Map());
   const [showComposer, setShowComposer] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -76,14 +78,20 @@ export function SpotSocial({ spotId }: Props) {
     // Profile lookup for session authors + like state for the listed sessions
     const authorIds = Array.from(new Set(sessionsList.map((s) => s.user_id)));
     const sessionIds = sessionsList.map((s) => s.id);
-    const [authorProfiles, sessionLikeCounts, viewerLikedIds] = await Promise.all([
+    const [authorProfiles, sessionLikeCounts, viewerLikedIds, sessionPhotos] = await Promise.all([
       getPublicProfiles(supabase, authorIds),
       getLikeCounts(supabase, sessionIds),
       user ? getLikedSessionIds(supabase, user.id, sessionIds) : Promise.resolve(new Set<string>()),
+      getPhotosForSessions(supabase, sessionIds),
     ]);
     setProfiles(authorProfiles);
     setLikeCounts(sessionLikeCounts);
     setLikedIds(viewerLikedIds);
+    const urlMap = new Map<string, string[]>();
+    for (const [sid, photos] of sessionPhotos) {
+      urlMap.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
+    }
+    setPhotoUrlsBySession(urlMap);
 
     // My RSVP state for each day
     if (user) {
@@ -219,6 +227,7 @@ export function SpotSocial({ spotId }: Props) {
                   {s.notes ? (
                     <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
                   ) : null}
+                  <PhotoGrid urls={photoUrlsBySession.get(s.id) ?? []} />
                   <div className="mt-2">
                     <LikeButton
                       sessionId={s.id}
