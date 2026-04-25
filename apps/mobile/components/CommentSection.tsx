@@ -1,5 +1,5 @@
 import { Link, router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -23,17 +23,23 @@ import { supabase } from "../lib/supabase";
 type Props = {
   sessionId: string;
   initialCount: number;
+  defaultOpen?: boolean;
 };
 
-export function CommentSection({ sessionId, initialCount }: Props) {
+export function CommentSection({ sessionId, initialCount, defaultOpen = false }: Props) {
   const { user } = useAuth();
   const [count, setCount] = useState(initialCount);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [comments, setComments] = useState<SessionCommentRow[] | null>(null);
   const [profiles, setProfiles] = useState<Map<string, PublicProfile>>(new Map());
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) void loadIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadIfNeeded() {
     if (comments !== null) return;

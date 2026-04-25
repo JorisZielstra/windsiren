@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   COMMENT_MAX_LENGTH,
   createComment,
@@ -17,11 +17,12 @@ type Props = {
   sessionId: string;
   initialCount: number;
   viewerId: string | null;
+  defaultOpen?: boolean;
 };
 
-export function CommentSection({ sessionId, initialCount, viewerId }: Props) {
+export function CommentSection({ sessionId, initialCount, viewerId, defaultOpen = false }: Props) {
   const [count, setCount] = useState(initialCount);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [comments, setComments] = useState<SessionCommentRow[] | null>(null);
   const [profiles, setProfiles] = useState<Map<string, PublicProfile>>(new Map());
   const [body, setBody] = useState("");
@@ -36,6 +37,12 @@ export function CommentSection({ sessionId, initialCount, viewerId }: Props) {
     const authorIds = Array.from(new Set(list.map((c) => c.user_id)));
     setProfiles(await getPublicProfiles(supabase, authorIds));
   }
+
+  // Auto-load when opened by default (e.g. session detail page).
+  useEffect(() => {
+    if (open) void loadIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function toggle() {
     const next = !open;
