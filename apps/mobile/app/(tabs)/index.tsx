@@ -2,8 +2,8 @@ import { Link, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,20 +13,43 @@ import { msToKnots, type Verdict } from "@windsiren/shared";
 import {
   dbRowToSpot,
   fetchFavoriteSpotIds,
+  fetchPersonalFeed,
   fetchTodayVerdict,
+  getCommentCounts,
+  getLikeCounts,
+  getLikedSessionIds,
+  getPhotosForSessions,
+  getPhotoPublicUrl,
+  getPublicProfiles,
   peakWindMs,
   pickHeroSpot,
+  type FeedItem,
+  type PublicProfile,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import { HeroSpotCard } from "../../components/HeroSpotCard";
+import { SessionCard } from "../../components/SessionCard";
 import { useAuth } from "../../lib/auth-context";
+import { relativeTime } from "../../lib/relative-time";
 import { supabase } from "../../lib/supabase";
+
+type FeedData = {
+  items: FeedItem[];
+  profiles: Map<string, PublicProfile>;
+  spots: Map<string, { name: string; slug: string }>;
+  likeCounts: Map<string, number>;
+  likedIds: Set<string>;
+  photoUrls: Map<string, string[]>;
+  commentCounts: Map<string, number>;
+};
 
 export default function SpotsListScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [feed, setFeed] = useState<FeedData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [otherOpen, setOtherOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,9 +71,48 @@ export default function SpotsListScreen() {
           Promise.all(spots.map(fetchTodayVerdict)),
           user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
         ]);
-        if (!cancelled) {
-          setItems(results);
-          setFavoriteIds(favIds);
+        if (cancelled) return;
+        setItems(results);
+        setFavoriteIds(favIds);
+
+        if (user) {
+          const feedItems = await fetchPersonalFeed(supabase, user.id, {
+            limit: 5,
+            includeSelf: true,
+          });
+          if (cancelled) return;
+          const sessionIds = feedItems.filter((i) => i.type === "session").map((i) => i.session.id);
+          const authorIds = Array.from(new Set(feedItems.map((i) => i.userId)));
+          const spotIds = Array.from(new Set(feedItems.map((i) => i.spotId)));
+          const [profiles, spotRes, likeCounts, likedIds, photosBySession, commentCounts] =
+            await Promise.all([
+              getPublicProfiles(supabase, authorIds),
+              spotIds.length > 0
+                ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
+                : Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
+              getLikeCounts(supabase, sessionIds),
+              getLikedSessionIds(supabase, user.id, sessionIds),
+              getPhotosForSessions(supabase, sessionIds),
+              getCommentCounts(supabase, sessionIds),
+            ]);
+          if (cancelled) return;
+          const spotMap = new Map<string, { name: string; slug: string }>();
+          for (const s of spotRes.data ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
+          const photoUrls = new Map<string, string[]>();
+          for (const [sid, photos] of photosBySession) {
+            photoUrls.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
+          }
+          setFeed({
+            items: feedItems,
+            profiles,
+            spots: spotMap,
+            likeCounts,
+            likedIds,
+            photoUrls,
+            commentCounts,
+          });
+        } else {
+          setFeed(null);
         }
       })();
       return () => {
@@ -62,8 +124,11 @@ export default function SpotsListScreen() {
   const favoriteItems = items?.filter((i) => favoriteIds.has(i.spot.id)) ?? [];
   const heroPool = favoriteItems.length > 0 ? favoriteItems : (items ?? []);
   const hero = pickHeroSpot(heroPool);
-  const restOfFavorites = favoriteItems.filter((f) => f.spot.id !== hero?.spot.id);
-  const restOfAll = (items ?? []).filter((i) => i.spot.id !== hero?.spot.id);
+  const restFavorites = favoriteItems.filter((f) => f.spot.id !== hero?.spot.id);
+  const restNonFavorites = (items ?? []).filter(
+    (i) => i.spot.id !== hero?.spot.id && !favoriteIds.has(i.spot.id),
+  );
+  const otherCount = restFavorites.length + restNonFavorites.length;
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -75,25 +140,119 @@ export default function SpotsListScreen() {
       ) : !items ? (
         <ActivityIndicator style={styles.loader} size="large" />
       ) : (
-        <FlatList
-          data={restOfAll}
-          keyExtractor={(item) => item.spot.id}
-          renderItem={({ item }) => <SpotRow item={item} />}
-          ListHeaderComponent={
-            <View>
-              {hero ? <HeroSpotCard item={hero} /> : null}
-              {user && restOfFavorites.length > 0 ? (
-                <View style={styles.favSection}>
-                  <Text style={styles.sectionLabel}>Your spots</Text>
-                  {restOfFavorites.map((item) => (
-                    <SpotRow key={item.spot.id} item={item} />
-                  ))}
+        <ScrollView contentContainerStyle={styles.scroll}>
+          {hero ? <HeroSpotCard item={hero} /> : null}
+
+          {otherCount > 0 ? (
+            <View style={styles.otherSection}>
+              <Pressable
+                onPress={() => setOtherOpen((o) => !o)}
+                style={styles.otherHeader}
+              >
+                <Text style={styles.otherChevron}>{otherOpen ? "▾" : "▸"}</Text>
+                <Text style={styles.otherTitle}>Other spots</Text>
+                <Text style={styles.otherCount}>{otherCount}</Text>
+              </Pressable>
+              {otherOpen ? (
+                <View style={styles.otherBody}>
+                  {restFavorites.length > 0 ? (
+                    <>
+                      <Text style={styles.subLabel}>Your spots</Text>
+                      {restFavorites.map((item) => (
+                        <SpotRow key={item.spot.id} item={item} />
+                      ))}
+                    </>
+                  ) : null}
+                  {restNonFavorites.length > 0 ? (
+                    <>
+                      <Text style={[styles.subLabel, styles.subLabelSpaced]}>All NL spots</Text>
+                      {restNonFavorites.map((item) => (
+                        <SpotRow key={item.spot.id} item={item} />
+                      ))}
+                    </>
+                  ) : null}
                 </View>
               ) : null}
-              <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>All NL spots</Text>
             </View>
-          }
-        />
+          ) : null}
+
+          {user ? (
+            <View style={styles.feedSection}>
+              <View style={styles.feedHeader}>
+                <Text style={styles.feedTitle}>Your feed</Text>
+                <Link href="/(tabs)/feed" asChild>
+                  <Pressable>
+                    <Text style={styles.feedViewAll}>View all →</Text>
+                  </Pressable>
+                </Link>
+              </View>
+              {!feed ? (
+                <ActivityIndicator />
+              ) : feed.items.length === 0 ? (
+                <View style={styles.feedEmpty}>
+                  <Text style={styles.feedEmptyText}>
+                    Nothing yet. Follow other kiters on a spot page, or log a session to get the feed going.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.feedList}>
+                  {feed.items.map((item) => {
+                    const authorName =
+                      feed.profiles.get(item.userId)?.display_name ?? "Someone";
+                    const spot = feed.spots.get(item.spotId) ?? null;
+                    if (item.type === "session") {
+                      return (
+                        <SessionCard
+                          key={`s:${item.session.id}`}
+                          session={item.session}
+                          authorId={item.userId}
+                          authorName={authorName}
+                          spot={spot}
+                          createdAtRelative={relativeTime(item.createdAt)}
+                          photoUrls={feed.photoUrls.get(item.session.id) ?? []}
+                          likeCount={feed.likeCounts.get(item.session.id) ?? 0}
+                          liked={feed.likedIds.has(item.session.id)}
+                          commentCount={feed.commentCounts.get(item.session.id) ?? 0}
+                        />
+                      );
+                    }
+                    const r = item.rsvp;
+                    return (
+                      <View key={`r:${r.id}`} style={styles.rsvpCard}>
+                        <Text style={styles.rsvpText}>
+                          <Link href={`/users/${item.userId}`} asChild>
+                            <Pressable>
+                              <Text style={styles.linkText}>{authorName}</Text>
+                            </Pressable>
+                          </Link>{" "}
+                          is going to{" "}
+                          {spot ? (
+                            <Link href={`/spots/${spot.slug}`} asChild>
+                              <Pressable>
+                                <Text style={styles.linkText}>{spot.name}</Text>
+                              </Pressable>
+                            </Link>
+                          ) : (
+                            <Text>Unknown spot</Text>
+                          )}{" "}
+                          on{" "}
+                          <Text style={styles.semibold}>
+                            {new Date(r.planned_date).toLocaleDateString("en-NL", {
+                              weekday: "long",
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </Text>
+                        </Text>
+                        <Text style={styles.rsvpTime}>{relativeTime(item.createdAt)}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          ) : null}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -150,27 +309,7 @@ function VerdictPill({ verdict }: { verdict: Verdict | null }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e5e5e5",
-  },
-  title: { fontSize: 26, fontWeight: "700", color: "#18181b" },
-  subtitle: { fontSize: 13, color: "#6b7280", marginTop: 4 },
-  favSection: {},
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    color: "#6b7280",
-    textTransform: "uppercase",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 6,
-  },
-  sectionLabelSpaced: { paddingTop: 20 },
+  scroll: { paddingBottom: 24 },
   loader: { marginTop: 48 },
   errorBox: {
     margin: 16,
@@ -182,20 +321,48 @@ const styles = StyleSheet.create({
   },
   errorTitle: { fontWeight: "600", color: "#991b1b" },
   errorText: { marginTop: 4, color: "#7f1d1d", fontSize: 13 },
+  otherSection: {
+    marginTop: 16,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  otherHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  otherChevron: { fontSize: 14, color: "#a1a1aa" },
+  otherTitle: { fontSize: 14, fontWeight: "600", color: "#18181b", flex: 1 },
+  otherCount: { fontSize: 12, color: "#71717a", fontVariant: ["tabular-nums"] },
+  otherBody: { borderTopColor: "#f4f4f5", borderTopWidth: 1, paddingBottom: 6 },
+  subLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: "#6b7280",
+    textTransform: "uppercase",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  subLabelSpaced: { paddingTop: 16 },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#f0f0f0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#f0f0f0",
   },
-  rowPressed: {
-    backgroundColor: "#f4f4f5",
-  },
+  rowPressed: { backgroundColor: "#f4f4f5" },
   rowMain: { flex: 1 },
   rowTitleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
-  rowTitle: { fontSize: 16, fontWeight: "500" },
+  rowTitle: { fontSize: 15, fontWeight: "500" },
   rowSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
   tideBadge: {
     backgroundColor: "#dbeafe",
@@ -206,4 +373,38 @@ const styles = StyleSheet.create({
   tideBadgeText: { fontSize: 10, color: "#1e40af", fontWeight: "600" },
   verdictPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   verdictText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  feedSection: { marginTop: 24, paddingHorizontal: 16 },
+  feedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 10,
+  },
+  feedTitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: "#6b7280",
+    textTransform: "uppercase",
+  },
+  feedViewAll: { fontSize: 12, color: "#71717a" },
+  feedEmpty: {
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 8,
+  },
+  feedEmptyText: { fontSize: 13, color: "#71717a", lineHeight: 18 },
+  feedList: { gap: 12 },
+  rsvpCard: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  rsvpText: { fontSize: 13, color: "#18181b", lineHeight: 19 },
+  rsvpTime: { fontSize: 11, color: "#71717a", marginTop: 4 },
+  linkText: { color: "#0369a1", fontWeight: "600" },
+  semibold: { fontWeight: "600" },
 });

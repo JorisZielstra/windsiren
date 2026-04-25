@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin /opt/homebrew/bin/pnpm --filter mobile typecheck)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
