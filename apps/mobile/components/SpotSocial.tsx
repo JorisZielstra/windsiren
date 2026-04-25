@@ -1,9 +1,12 @@
 import { Link, router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +22,8 @@ import {
   getPublicProfiles,
   isUserRsvpdForDay,
   listSessionsForSpot,
+  MAX_PHOTOS_PER_SESSION,
+  uploadSessionPhoto,
   type PublicProfile,
 } from "@windsiren/core";
 import type { SessionRow } from "@windsiren/supabase";
@@ -220,8 +225,26 @@ function SessionComposer({
   const [selectedOffset, setSelectedOffset] = useState<DayOffset>(0);
   const [duration, setDuration] = useState("60");
   const [notes, setNotes] = useState("");
+  const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function pickPhotos() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setError("Photo library access denied");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_PHOTOS_PER_SESSION,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets) {
+      setPhotos(result.assets.slice(0, MAX_PHOTOS_PER_SESSION));
+    }
+  }
 
   async function onSubmit() {
     setBusy(true);
@@ -234,11 +257,34 @@ function SessionComposer({
       durationMinutes: mins,
       notes: notes.trim() || null,
     });
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       setError(result.message);
       return;
     }
+
+    // Upload each picked photo. RN's fetch returns a Blob from a local URI.
+    for (let i = 0; i < photos.length; i++) {
+      const asset = photos[i]!;
+      try {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const ext = (asset.fileName?.split(".").pop() ?? asset.uri.split(".").pop() ?? "jpg")
+          .toLowerCase();
+        const upload = await uploadSessionPhoto(supabase, userId, result.session.id, blob, {
+          ordinal: i,
+          ext,
+          contentType: asset.mimeType ?? `image/${ext === "jpg" ? "jpeg" : ext}`,
+        });
+        if (!upload.ok) {
+          setError(`Session posted; photo ${i + 1} failed: ${upload.message}`);
+        }
+      } catch (e) {
+        setError(`Session posted; photo ${i + 1} failed: ${(e as Error).message}`);
+      }
+    }
+
+    setBusy(false);
     onCreated();
   }
 
@@ -246,7 +292,9 @@ function SessionComposer({
     <Pressable style={styles.modalBackdrop} onPress={onClose}>
       <Pressable style={styles.modalCard} onPress={() => {}}>
         <Text style={styles.modalTitle}>Log session</Text>
-        <Text style={styles.modalHint}>Text-only for now. Photos soon.</Text>
+        <Text style={styles.modalHint}>
+          Up to {MAX_PHOTOS_PER_SESSION} photos.
+        </Text>
 
         <Text style={styles.formLabel}>When</Text>
         <View style={styles.dayRow}>
@@ -286,6 +334,22 @@ function SessionComposer({
           maxLength={500}
           style={[styles.input, { height: 80, textAlignVertical: "top" }]}
         />
+
+        <Text style={styles.formLabel}>Photos</Text>
+        <Pressable style={styles.pickPhotosBtn} onPress={pickPhotos}>
+          <Text style={styles.pickPhotosBtnText}>
+            {photos.length === 0
+              ? "+ Add photos"
+              : `${photos.length} photo${photos.length === 1 ? "" : "s"} selected · tap to change`}
+          </Text>
+        </Pressable>
+        {photos.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbRow}>
+            {photos.map((p, i) => (
+              <Image key={i} source={{ uri: p.uri }} style={styles.thumb} />
+            ))}
+          </ScrollView>
+        ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -377,4 +441,15 @@ const styles = StyleSheet.create({
   cancelText: { fontSize: 14, color: "#6b7280" },
   postBtn: { backgroundColor: "#18181b", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 6 },
   postBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  pickPhotosBtn: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#a1a1aa",
+    borderRadius: 6,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  pickPhotosBtnText: { fontSize: 13, color: "#52525b", fontWeight: "500" },
+  thumbRow: { marginTop: 8, flexDirection: "row" },
+  thumb: { width: 60, height: 60, borderRadius: 6, marginRight: 8, backgroundColor: "#f4f4f5" },
 });

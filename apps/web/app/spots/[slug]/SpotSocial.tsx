@@ -9,11 +9,16 @@ import {
   deleteRsvp,
   getLikeCounts,
   getLikedSessionIds,
+  getPhotosForSessions,
+  getPhotoPublicUrl,
   getPublicProfiles,
   isUserRsvpdForDay,
   listSessionsForSpot,
+  MAX_PHOTOS_PER_SESSION,
+  uploadSessionPhoto,
   type PublicProfile,
 } from "@windsiren/core";
+import type { SessionPhotoRow } from "@windsiren/supabase";
 import type { SessionRow } from "@windsiren/supabase";
 import { LikeButton } from "@/components/LikeButton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
@@ -259,8 +264,14 @@ function SessionComposer({
   const [date, setDate] = useState(dateKeyForOffset(0));
   const [duration, setDuration] = useState("60");
   const [notes, setNotes] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files ?? []).slice(0, MAX_PHOTOS_PER_SESSION);
+    setFiles(list);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -274,11 +285,28 @@ function SessionComposer({
       durationMinutes: mins,
       notes: notes.trim() || null,
     });
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       setError(result.message);
       return;
     }
+
+    // Upload photos in series so the order matches their picked order.
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i]!;
+      const ext = f.name.split(".").pop() ?? "jpg";
+      const upload = await uploadSessionPhoto(supabase, userId, result.session.id, f, {
+        ordinal: i,
+        ext,
+        contentType: f.type,
+      });
+      if (!upload.ok) {
+        // Session is created; partial photo upload is non-fatal.
+        setError(`Session posted, but photo ${i + 1} failed: ${upload.message}`);
+      }
+    }
+
+    setBusy(false);
     onCreated();
   }
 
@@ -293,7 +321,9 @@ function SessionComposer({
         className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-zinc-950"
       >
         <h3 className="text-lg font-semibold">Log session</h3>
-        <p className="mt-1 text-xs text-zinc-500">Text-only for now. Photos soon.</p>
+        <p className="mt-1 text-xs text-zinc-500">
+          Up to {MAX_PHOTOS_PER_SESSION} photos.
+        </p>
 
         <label className="mt-5 block">
           <span className="text-sm font-medium">Date</span>
@@ -328,6 +358,30 @@ function SessionComposer({
             placeholder="How was it?"
             className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
           />
+        </label>
+
+        <label className="mt-4 block">
+          <span className="text-sm font-medium">Photos</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            multiple
+            onChange={onPickFiles}
+            className="mt-1 block w-full text-sm"
+          />
+          {files.length > 0 ? (
+            <div className="mt-2 flex gap-2">
+              {files.map((f, i) => (
+                <span
+                  key={i}
+                  className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
+                  title={f.name}
+                >
+                  {f.name.length > 16 ? f.name.slice(0, 13) + "…" : f.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </label>
 
         {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
