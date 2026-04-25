@@ -9,10 +9,12 @@ import {
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfile,
+  getUserStats,
   listSessionsForUser,
   listUserRsvps,
 } from "@windsiren/core";
 import { SessionCard } from "@/components/SessionCard";
+import { UserStatsPanel } from "@/components/UserStatsPanel";
 import { relativeTime } from "@/lib/relative-time";
 import { FollowButton } from "./FollowButton";
 
@@ -26,18 +28,23 @@ export default async function UserProfilePage({
   const { userId } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [profile, counts, sessions, rsvps] = await Promise.all([
+  const [profile, counts, sessions, rsvps, stats] = await Promise.all([
     getPublicProfile(supabase, userId),
     getFollowCounts(supabase, userId),
     listSessionsForUser(supabase, userId, 20),
     listUserRsvps(supabase, userId, 20),
+    getUserStats(supabase, userId),
   ]);
 
   if (!profile) notFound();
 
-  // Resolve spot names for sessions + rsvps in one query.
+  // Resolve spot names for sessions + rsvps + top-spot stat in one query.
   const spotIds = Array.from(
-    new Set([...sessions.map((s) => s.spot_id), ...rsvps.map((r) => r.spot_id)]),
+    new Set([
+      ...sessions.map((s) => s.spot_id),
+      ...rsvps.map((r) => r.spot_id),
+      ...(stats.topSpot ? [stats.topSpot.spotId] : []),
+    ]),
   );
   const spotMap = new Map<string, { name: string; slug: string }>();
   if (spotIds.length > 0) {
@@ -105,6 +112,17 @@ export default async function UserProfilePage({
           <FollowButton targetUserId={userId} />
         </div>
       </header>
+
+      <section className="mb-10">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Stats
+        </h2>
+        <UserStatsPanel
+          stats={stats}
+          topSpotName={stats.topSpot ? spotMap.get(stats.topSpot.spotId)?.name ?? null : null}
+          topSpotSlug={stats.topSpot ? spotMap.get(stats.topSpot.spotId)?.slug ?? null : null}
+        />
+      </section>
 
       <section className="mb-10">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">

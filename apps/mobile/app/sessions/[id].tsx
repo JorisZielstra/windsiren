@@ -158,6 +158,15 @@ export default function SessionDetailScreen() {
 
           <SessionWindHero session={session} size="detail" />
 
+          {session.max_jump_m != null ? (
+            <View style={styles.jumpRow}>
+              <View style={styles.jumpChip}>
+                <Text style={styles.jumpChipLabel}>Highest jump </Text>
+                <Text style={styles.jumpChipValue}>{session.max_jump_m.toFixed(1)} m</Text>
+              </View>
+            </View>
+          ) : null}
+
           {session.notes ? <Text style={styles.notes}>{session.notes}</Text> : null}
 
           {photoUrls.length > 0 ? (
@@ -227,6 +236,17 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   photos: { paddingHorizontal: 16, paddingBottom: 16 },
+  jumpRow: { paddingHorizontal: 16, paddingBottom: 16, flexDirection: "row" },
+  jumpChip: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  jumpChipLabel: { fontSize: 13, color: "#065f46", fontWeight: "500" },
+  jumpChipValue: { fontSize: 13, color: "#065f46", fontWeight: "700", fontVariant: ["tabular-nums"] },
   reactions: {
     borderTopColor: "#f4f4f5",
     borderTopWidth: 1,

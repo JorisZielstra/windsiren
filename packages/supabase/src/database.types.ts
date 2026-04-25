@@ -343,6 +343,7 @@ export type Database = {
           wind_max_ms: number | null;
           wind_dir_avg_deg: number | null;
           gust_max_ms: number | null;
+          max_jump_m: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -357,6 +358,7 @@ export type Database = {
           wind_max_ms?: number | null;
           wind_dir_avg_deg?: number | null;
           gust_max_ms?: number | null;
+          max_jump_m?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -371,6 +373,7 @@ export type Database = {
           wind_max_ms?: number | null;
           wind_dir_avg_deg?: number | null;
           gust_max_ms?: number | null;
+          max_jump_m?: number | null;
           created_at?: string;
           updated_at?: string;
         };

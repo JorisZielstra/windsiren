@@ -12,6 +12,7 @@ export type CreateSessionInput = {
   windMaxMs?: number | null;
   windDirAvgDeg?: number | null;
   gustMaxMs?: number | null;
+  maxJumpM?: number | null;
 };
 
 export type CreateSessionResult =
@@ -41,6 +42,7 @@ export async function createSession(
       wind_max_ms: input.windMaxMs ?? null,
       wind_dir_avg_deg: input.windDirAvgDeg ?? null,
       gust_max_ms: input.gustMaxMs ?? null,
+      max_jump_m: input.maxJumpM ?? null,
     })
     .select("*")
     .single();

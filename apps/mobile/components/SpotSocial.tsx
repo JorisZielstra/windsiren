@@ -233,6 +233,7 @@ function SessionComposer({
   const spotId = spot.id;
   const [selectedOffset, setSelectedOffset] = useState<DayOffset>(0);
   const [duration, setDuration] = useState("60");
+  const [maxJump, setMaxJump] = useState("");
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [busy, setBusy] = useState(false);
@@ -266,6 +267,9 @@ function SessionComposer({
     const isToday = sessionDate === dateKeyForOffset(0);
     const wind = isToday ? await summarizeWindForToday(spot) : null;
 
+    const jumpVal = maxJump.trim() ? parseFloat(maxJump) : NaN;
+    const maxJumpM = Number.isFinite(jumpVal) && jumpVal > 0 ? jumpVal : null;
+
     const result = await createSession(supabase, {
       userId,
       spotId,
@@ -276,6 +280,7 @@ function SessionComposer({
       windMaxMs: wind?.windMaxMs ?? null,
       windDirAvgDeg: wind ? Math.round(wind.windDirAvgDeg) : null,
       gustMaxMs: wind?.gustMaxMs ?? null,
+      maxJumpM,
     });
     if (!result.ok) {
       setBusy(false);
@@ -341,6 +346,16 @@ function SessionComposer({
           value={duration}
           onChangeText={setDuration}
           keyboardType="number-pad"
+          style={styles.input}
+        />
+
+        <Text style={styles.formLabel}>Highest jump (m, optional)</Text>
+        <TextInput
+          value={maxJump}
+          onChangeText={setMaxJump}
+          keyboardType="decimal-pad"
+          placeholder="e.g. 6.2"
+          placeholderTextColor="#a1a1aa"
           style={styles.input}
         />
 

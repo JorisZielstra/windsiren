@@ -72,6 +72,14 @@ export function SessionCard({
 
       <SessionWindHero session={session} />
 
+      {session.max_jump_m != null ? (
+        <div className="flex items-center gap-2 px-4 pb-3 text-xs">
+          <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+            Highest jump <span className="font-mono">{session.max_jump_m.toFixed(1)} m</span>
+          </span>
+        </div>
+      ) : null}
+
       {session.notes ? (
         <p className="px-4 pb-3 text-sm text-zinc-700 dark:text-zinc-300">
           {session.notes}

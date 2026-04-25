@@ -266,6 +266,7 @@ function SessionComposer({
   const supabase = createSupabaseBrowserClient();
   const [date, setDate] = useState(dateKeyForOffset(0));
   const [duration, setDuration] = useState("60");
+  const [maxJump, setMaxJump] = useState("");
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -287,6 +288,9 @@ function SessionComposer({
     const isToday = date === dateKeyForOffset(0);
     const wind = isToday ? await summarizeWindForToday(spot) : null;
 
+    const jumpVal = maxJump.trim() ? parseFloat(maxJump) : NaN;
+    const maxJumpM = Number.isFinite(jumpVal) && jumpVal > 0 ? jumpVal : null;
+
     const result = await createSession(supabase, {
       userId,
       spotId: spot.id,
@@ -297,6 +301,7 @@ function SessionComposer({
       windMaxMs: wind?.windMaxMs ?? null,
       windDirAvgDeg: wind ? Math.round(wind.windDirAvgDeg) : null,
       gustMaxMs: wind?.gustMaxMs ?? null,
+      maxJumpM,
     });
     if (!result.ok) {
       setBusy(false);
@@ -357,6 +362,21 @@ function SessionComposer({
             onChange={(e) => setDuration(e.target.value)}
             min={1}
             max={1439}
+            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+
+        <label className="mt-4 block">
+          <span className="text-sm font-medium">Highest jump (m, optional)</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min={0}
+            max={50}
+            value={maxJump}
+            onChange={(e) => setMaxJump(e.target.value)}
+            placeholder="e.g. 6.2"
             className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>

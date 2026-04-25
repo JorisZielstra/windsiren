@@ -98,6 +98,14 @@ export default async function SessionDetailPage({
         {/* Wind hero — bigger on detail page */}
         <SessionWindHero session={session} size="detail" />
 
+        {session.max_jump_m != null ? (
+          <div className="flex items-center gap-2 px-6 pb-6 text-sm">
+            <span className="rounded-md bg-emerald-50 px-3 py-1 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              Highest jump <span className="font-mono">{session.max_jump_m.toFixed(1)} m</span>
+            </span>
+          </div>
+        ) : null}
+
         {/* Notes */}
         {session.notes ? (
           <p className="px-6 pb-6 text-base text-zinc-700 dark:text-zinc-300">

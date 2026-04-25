@@ -10,3 +10,4 @@ export * from "./likes";
 export * from "./photos";
 export * from "./comments";
 export * from "./home-spot";
+export * from "./user-stats";

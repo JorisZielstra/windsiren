@@ -18,15 +18,18 @@ import {
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfile,
+  getUserStats,
   isFollowing,
   listSessionsForUser,
   listUserRsvps,
   unfollowUser,
   type FollowCounts,
   type PublicProfile,
+  type UserStats,
 } from "@windsiren/core";
 import type { RsvpRow, SessionRow } from "@windsiren/supabase";
 import { SessionCard } from "../../components/SessionCard";
+import { UserStatsPanel } from "../../components/UserStatsPanel";
 import { useAuth } from "../../lib/auth-context";
 import { relativeTime } from "../../lib/relative-time";
 import { supabase } from "../../lib/supabase";
@@ -41,6 +44,7 @@ type Loaded = {
   likeCounts: Map<string, number>;
   likedIds: Set<string>;
   commentCounts: Map<string, number>;
+  stats: UserStats;
 };
 
 export default function UserProfileScreen() {
@@ -55,11 +59,12 @@ export default function UserProfileScreen() {
     setError(null);
     (async () => {
       try {
-        const [profile, counts, sessions, rsvps] = await Promise.all([
+        const [profile, counts, sessions, rsvps, stats] = await Promise.all([
           getPublicProfile(supabase, userId),
           getFollowCounts(supabase, userId),
           listSessionsForUser(supabase, userId, 20),
           listUserRsvps(supabase, userId, 20),
+          getUserStats(supabase, userId),
         ]);
         if (cancelled) return;
         if (!profile) {
@@ -68,7 +73,11 @@ export default function UserProfileScreen() {
         }
 
         const spotIds = Array.from(
-          new Set([...sessions.map((s) => s.spot_id), ...rsvps.map((r) => r.spot_id)]),
+          new Set([
+            ...sessions.map((s) => s.spot_id),
+            ...rsvps.map((r) => r.spot_id),
+            ...(stats.topSpot ? [stats.topSpot.spotId] : []),
+          ]),
         );
         const spotsById = new Map<string, { name: string; slug: string }>();
         if (spotIds.length > 0) {
@@ -107,6 +116,7 @@ export default function UserProfileScreen() {
             likeCounts,
             likedIds,
             commentCounts,
+            stats,
           });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -169,6 +179,23 @@ export default function UserProfileScreen() {
                   </Pressable>
                 )}
               </View>
+            </View>
+
+            <Text style={styles.sectionLabel}>Stats</Text>
+            <View style={styles.statsWrap}>
+              <UserStatsPanel
+                stats={loaded.stats}
+                topSpotName={
+                  loaded.stats.topSpot
+                    ? loaded.spotsById.get(loaded.stats.topSpot.spotId)?.name ?? null
+                    : null
+                }
+                topSpotSlug={
+                  loaded.stats.topSpot
+                    ? loaded.spotsById.get(loaded.stats.topSpot.spotId)?.slug ?? null
+                    : null
+                }
+              />
             </View>
 
             {loaded.upcomingRsvps.length > 0 ? (
@@ -288,5 +315,6 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: "500" },
   rowSub: { fontSize: 11, color: "#6b7280" },
   cardWrap: { paddingHorizontal: 16 },
+  statsWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   separator: { height: 12 },
 });
