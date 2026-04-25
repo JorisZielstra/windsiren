@@ -11,7 +11,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   followUser,
+  getCommentCounts,
   getFollowCounts,
+  getLikeCounts,
+  getLikedSessionIds,
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfile,
@@ -23,9 +26,9 @@ import {
   type PublicProfile,
 } from "@windsiren/core";
 import type { RsvpRow, SessionRow } from "@windsiren/supabase";
-import { PhotoGrid } from "../../components/PhotoGrid";
-import { SessionWindChip } from "../../components/SessionWindChip";
+import { SessionCard } from "../../components/SessionCard";
 import { useAuth } from "../../lib/auth-context";
+import { relativeTime } from "../../lib/relative-time";
 import { supabase } from "../../lib/supabase";
 
 type Loaded = {
@@ -35,6 +38,9 @@ type Loaded = {
   upcomingRsvps: RsvpRow[];
   spotsById: Map<string, { name: string; slug: string }>;
   photoUrls: Map<string, string[]>;
+  likeCounts: Map<string, number>;
+  likedIds: Set<string>;
+  commentCounts: Map<string, number>;
 };
 
 export default function UserProfileScreen() {
@@ -76,14 +82,32 @@ export default function UserProfileScreen() {
         const today = new Date().toISOString().slice(0, 10);
         const upcomingRsvps = rsvps.filter((r) => r.planned_date >= today);
 
-        const photosBySession = await getPhotosForSessions(supabase, sessions.map((s) => s.id));
+        const sessionIds = sessions.map((s) => s.id);
+        const [photosBySession, likeCounts, likedIds, commentCounts] = await Promise.all([
+          getPhotosForSessions(supabase, sessionIds),
+          getLikeCounts(supabase, sessionIds),
+          user
+            ? getLikedSessionIds(supabase, user.id, sessionIds)
+            : Promise.resolve(new Set<string>()),
+          getCommentCounts(supabase, sessionIds),
+        ]);
         const photoUrls = new Map<string, string[]>();
         for (const [sid, photos] of photosBySession) {
           photoUrls.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
         }
 
         if (!cancelled)
-          setLoaded({ profile, counts, sessions, upcomingRsvps, spotsById, photoUrls });
+          setLoaded({
+            profile,
+            counts,
+            sessions,
+            upcomingRsvps,
+            spotsById,
+            photoUrls,
+            likeCounts,
+            likedIds,
+            commentCounts,
+          });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -91,7 +115,7 @@ export default function UserProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, user]);
 
   if (error) {
     return (
@@ -176,26 +200,23 @@ export default function UserProfileScreen() {
         }
         data={loaded.sessions}
         keyExtractor={(s) => s.id}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => {
-          const spot = loaded.spotsById.get(item.spot_id);
+          const spot = loaded.spotsById.get(item.spot_id) ?? null;
           return (
-            <View style={styles.row}>
-              <View style={styles.rowTopLine}>
-                <Text style={styles.rowTitle}>{spot?.name ?? "Unknown spot"}</Text>
-                <Text style={styles.rowDuration}>{item.duration_minutes} min</Text>
-              </View>
-              <View style={styles.rowMetaLine}>
-                <Text style={styles.rowSub}>
-                  {new Date(item.session_date).toLocaleDateString("en-NL", {
-                    weekday: "long",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-                <SessionWindChip session={item} />
-              </View>
-              {item.notes ? <Text style={styles.rowNotes}>{item.notes}</Text> : null}
-              <PhotoGrid urls={loaded.photoUrls.get(item.id) ?? []} />
+            <View style={styles.cardWrap}>
+              <SessionCard
+                session={item}
+                authorId={item.user_id}
+                authorName={loaded.profile.display_name ?? "Someone"}
+                spot={spot}
+                showAuthor={false}
+                createdAtRelative={relativeTime(item.created_at)}
+                photoUrls={loaded.photoUrls.get(item.id) ?? []}
+                likeCount={loaded.likeCounts.get(item.id) ?? 0}
+                liked={loaded.likedIds.has(item.id)}
+                commentCount={loaded.commentCounts.get(item.id) ?? 0}
+              />
             </View>
           );
         }}
@@ -264,10 +285,8 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 10, fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6 },
   empty: { paddingHorizontal: 20, fontSize: 13, color: "#9ca3af" },
   row: { paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#f0f0f0" },
-  rowTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rowTitle: { fontSize: 15, fontWeight: "500" },
-  rowDuration: { fontSize: 13, color: "#6b7280", fontVariant: ["tabular-nums"] },
   rowSub: { fontSize: 11, color: "#6b7280" },
-  rowMetaLine: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  rowNotes: { fontSize: 13, color: "#374151", marginTop: 6, lineHeight: 18 },
+  cardWrap: { paddingHorizontal: 16 },
+  separator: { height: 12 },
 });

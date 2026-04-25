@@ -34,10 +34,8 @@ import type { Spot } from "@windsiren/shared";
 import type { SessionRow } from "@windsiren/supabase";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
-import { CommentSection } from "./CommentSection";
-import { LikeButton } from "./LikeButton";
-import { PhotoGrid } from "./PhotoGrid";
-import { SessionWindChip } from "./SessionWindChip";
+import { relativeTime } from "../lib/relative-time";
+import { SessionCard } from "./SessionCard";
 
 type DayOffset = 0 | 1 | 2;
 
@@ -177,43 +175,26 @@ export function SpotSocial({ spot }: { spot: Spot }) {
       ) : sessions.length === 0 ? (
         <Text style={styles.empty}>Nobody has logged a session here yet.</Text>
       ) : (
-        sessions.map((s) => {
-          const author = profiles.get(s.user_id);
-          return (
-            <View key={s.id} style={styles.sessionRow}>
-              <View style={styles.sessionTopLine}>
-                <Link href={`/users/${s.user_id}`} asChild>
-                  <Pressable>
-                    <Text style={styles.sessionAuthor}>
-                      {author?.display_name ?? "Someone"}
-                    </Text>
-                  </Pressable>
-                </Link>
-                <Text style={styles.sessionDuration}>{s.duration_minutes} min</Text>
-              </View>
-              <View style={styles.sessionMetaLine}>
-                <Text style={styles.sessionDate}>
-                  {new Date(s.session_date).toLocaleDateString("en-NL", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-                <SessionWindChip session={s} />
-              </View>
-              {s.notes ? <Text style={styles.sessionNotes}>{s.notes}</Text> : null}
-              <PhotoGrid urls={photoUrls.get(s.id) ?? []} />
-              <View style={{ marginTop: 8 }}>
-                <LikeButton
-                  sessionId={s.id}
-                  initialCount={likeCounts.get(s.id) ?? 0}
-                  initialLiked={likedIds.has(s.id)}
-                />
-              </View>
-              <CommentSection sessionId={s.id} initialCount={commentCounts.get(s.id) ?? 0} />
-            </View>
-          );
-        })
+        <View style={styles.sessionList}>
+          {sessions.map((s) => {
+            const author = profiles.get(s.user_id);
+            return (
+              <SessionCard
+                key={s.id}
+                session={s}
+                authorId={s.user_id}
+                authorName={author?.display_name ?? "Someone"}
+                spot={null}
+                showSpot={false}
+                createdAtRelative={relativeTime(s.created_at)}
+                photoUrls={photoUrls.get(s.id) ?? []}
+                likeCount={likeCounts.get(s.id) ?? 0}
+                liked={likedIds.has(s.id)}
+                commentCount={commentCounts.get(s.id) ?? 0}
+              />
+            );
+          })}
+        </View>
       )}
 
       <Modal
@@ -428,19 +409,7 @@ const styles = StyleSheet.create({
   rsvpDay: { fontSize: 13, fontWeight: "600", color: "#18181b" },
   rsvpCount: { fontSize: 11, color: "#6b7280", marginTop: 2 },
   empty: { fontSize: 13, color: "#9ca3af", marginTop: 6 },
-  sessionRow: {
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-  },
-  sessionTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  sessionAuthor: { fontSize: 14, fontWeight: "600", color: "#0369a1" },
-  sessionDuration: { fontSize: 13, color: "#6b7280", fontVariant: ["tabular-nums"] },
-  sessionDate: { fontSize: 11, color: "#6b7280" },
-  sessionMetaLine: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  sessionNotes: { fontSize: 13, color: "#374151", marginTop: 8, lineHeight: 18 },
+  sessionList: { marginTop: 6, gap: 10 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

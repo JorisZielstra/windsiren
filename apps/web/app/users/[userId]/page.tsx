@@ -2,15 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
+  getCommentCounts,
   getFollowCounts,
+  getLikeCounts,
+  getLikedSessionIds,
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfile,
   listSessionsForUser,
   listUserRsvps,
 } from "@windsiren/core";
-import { PhotoGrid } from "@/components/PhotoGrid";
-import { SessionWindChip } from "@/components/SessionWindChip";
+import { SessionCard } from "@/components/SessionCard";
+import { relativeTime } from "@/lib/relative-time";
 import { FollowButton } from "./FollowButton";
 
 export const dynamic = "force-dynamic";
@@ -45,9 +48,19 @@ export default async function UserProfilePage({
     for (const s of spotRows ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
   }
 
-  // Photos per session
+  // Photos / likes / comments per session — needed by SessionCard.
   const sessionIds = sessions.map((s) => s.id);
-  const photosBySession = await getPhotosForSessions(supabase, sessionIds);
+  const {
+    data: { user: viewer },
+  } = await supabase.auth.getUser();
+  const [photosBySession, likeCounts, likedSet, commentCounts] = await Promise.all([
+    getPhotosForSessions(supabase, sessionIds),
+    getLikeCounts(supabase, sessionIds),
+    viewer
+      ? getLikedSessionIds(supabase, viewer.id, sessionIds)
+      : Promise.resolve(new Set<string>()),
+    getCommentCounts(supabase, sessionIds),
+  ]);
   const photoUrlsBySession = new Map<string, string[]>();
   for (const [sid, photos] of photosBySession) {
     photoUrlsBySession.set(
@@ -140,43 +153,24 @@ export default async function UserProfilePage({
         {sessions.length === 0 ? (
           <p className="text-sm text-zinc-500">No sessions logged yet.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {sessions.map((s) => {
-              const spot = spotMap.get(s.spot_id);
+              const spot = spotMap.get(s.spot_id) ?? null;
               return (
-                <li
+                <SessionCard
                   key={s.id}
-                  className="rounded-md border border-zinc-200 px-4 py-3 dark:border-zinc-800"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium">
-                      {spot ? (
-                        <Link href={`/spots/${spot.slug}`} className="hover:underline">
-                          {spot.name}
-                        </Link>
-                      ) : (
-                        "Unknown spot"
-                      )}
-                    </div>
-                    <div className="text-sm text-zinc-500">
-                      {s.duration_minutes} min
-                    </div>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
-                    <span>
-                      {new Date(s.session_date).toLocaleDateString("en-NL", {
-                        weekday: "long",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                    <SessionWindChip session={s} />
-                  </div>
-                  {s.notes ? (
-                    <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
-                  ) : null}
-                  <PhotoGrid urls={photoUrlsBySession.get(s.id) ?? []} />
-                </li>
+                  session={s}
+                  authorId={s.user_id}
+                  authorName={profile.display_name ?? "Someone"}
+                  spot={spot}
+                  showAuthor={false}
+                  createdAtRelative={relativeTime(s.created_at)}
+                  photoUrls={photoUrlsBySession.get(s.id) ?? []}
+                  likeCount={likeCounts.get(s.id) ?? 0}
+                  liked={likedSet.has(s.id)}
+                  commentCount={commentCounts.get(s.id) ?? 0}
+                  viewerId={viewer?.id}
+                />
               );
             })}
           </ul>

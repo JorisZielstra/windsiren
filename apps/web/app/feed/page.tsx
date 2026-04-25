@@ -10,10 +10,8 @@ import {
   getPublicProfiles,
   type FeedItem,
 } from "@windsiren/core";
-import { CommentSection } from "@/components/CommentSection";
-import { LikeButton } from "@/components/LikeButton";
-import { PhotoGrid } from "@/components/PhotoGrid";
-import { SessionWindChip } from "@/components/SessionWindChip";
+import { SessionCard } from "@/components/SessionCard";
+import { relativeTime } from "@/lib/relative-time";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +25,6 @@ export default async function FeedPage() {
 
   const items = await fetchPersonalFeed(supabase, user.id, { limit: 50, includeSelf: true });
 
-  // Resolve author profiles + spot names + like state in batched round-trips.
   const authorIds = Array.from(new Set(items.map((i) => i.userId)));
   const spotIds = Array.from(new Set(items.map((i) => i.spotId)));
   const sessionIds = items.filter((i) => i.type === "session").map((i) => i.session.id);
@@ -46,7 +43,6 @@ export default async function FeedPage() {
   const spotMap = new Map<string, { name: string; slug: string }>();
   for (const s of spotRes.data ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
 
-  // Pre-compute public URLs server-side so client renders immediately.
   const photoUrlsBySession = new Map<string, string[]>();
   for (const [sid, photos] of photosBySession) {
     photoUrlsBySession.set(
@@ -79,7 +75,7 @@ export default async function FeedPage() {
               key={feedItemKey(item)}
               item={item}
               authorName={profiles.get(item.userId)?.display_name ?? "Someone"}
-              spot={spotMap.get(item.spotId)}
+              spot={spotMap.get(item.spotId) ?? null}
               viewerId={user.id}
               likeCount={
                 item.type === "session" ? likeCounts.get(item.session.id) ?? 0 : 0
@@ -115,13 +111,32 @@ function FeedRow({
 }: {
   item: FeedItem;
   authorName: string;
-  spot: { name: string; slug: string } | undefined;
+  spot: { name: string; slug: string } | null;
   viewerId: string;
   likeCount: number;
   liked: boolean;
   photoUrls: string[];
   commentCount: number;
 }) {
+  if (item.type === "session") {
+    return (
+      <SessionCard
+        session={item.session}
+        authorId={item.userId}
+        authorName={authorName}
+        spot={spot}
+        createdAtRelative={relativeTime(item.createdAt)}
+        photoUrls={photoUrls}
+        likeCount={likeCount}
+        liked={liked}
+        commentCount={commentCount}
+        viewerId={viewerId}
+      />
+    );
+  }
+
+  // RSVP — kept intentionally compact: it's an intent, not an event.
+  const r = item.rsvp;
   const spotLabel = spot ? (
     <Link href={`/spots/${spot.slug}`} className="font-medium hover:underline">
       {spot.name}
@@ -129,57 +144,14 @@ function FeedRow({
   ) : (
     <span className="font-medium">Unknown spot</span>
   );
-  const author = (
-    <Link href={`/users/${item.userId}`} className="font-medium hover:underline">
-      {authorName}
-    </Link>
-  );
-
-  if (item.type === "session") {
-    const s = item.session;
-    return (
-      <li className="rounded-md border border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm">
-            {author} kited at {spotLabel} for{" "}
-            <span className="font-mono">{s.duration_minutes} min</span>
-          </div>
-          <div className="text-xs text-zinc-500">{relativeTime(item.createdAt)}</div>
-        </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
-          <span>
-            {new Date(s.session_date).toLocaleDateString("en-NL", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-            })}
-          </span>
-          <SessionWindChip session={s} />
-        </div>
-        {s.notes ? (
-          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
-        ) : null}
-        <PhotoGrid urls={photoUrls} />
-        <div className="mt-3 flex items-center gap-4">
-          <LikeButton
-            sessionId={s.id}
-            initialCount={likeCount}
-            initialLiked={liked}
-            viewerId={viewerId}
-          />
-        </div>
-        <CommentSection sessionId={s.id} initialCount={commentCount} viewerId={viewerId} />
-      </li>
-    );
-  }
-
-  // RSVP
-  const r = item.rsvp;
   return (
     <li className="rounded-md border border-zinc-200 px-4 py-3 dark:border-zinc-800">
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm">
-          {author} is going to {spotLabel} on{" "}
+          <Link href={`/users/${item.userId}`} className="font-medium hover:underline">
+            {authorName}
+          </Link>{" "}
+          is going to {spotLabel} on{" "}
           <span className="font-medium">
             {new Date(r.planned_date).toLocaleDateString("en-NL", {
               weekday: "long",
@@ -194,15 +166,3 @@ function FeedRow({
   );
 }
 
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const diffMin = Math.max(0, Math.round((now - then) / 60000));
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin} min ago`;
-  const h = Math.round(diffMin / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.round(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString("en-NL", { month: "short", day: "numeric" });
-}

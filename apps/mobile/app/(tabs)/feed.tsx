@@ -20,11 +20,9 @@ import {
   type FeedItem,
   type PublicProfile,
 } from "@windsiren/core";
-import { CommentSection } from "../../components/CommentSection";
-import { LikeButton } from "../../components/LikeButton";
-import { PhotoGrid } from "../../components/PhotoGrid";
-import { SessionWindChip } from "../../components/SessionWindChip";
+import { SessionCard } from "../../components/SessionCard";
 import { useAuth } from "../../lib/auth-context";
+import { relativeTime } from "../../lib/relative-time";
 import { supabase } from "../../lib/supabase";
 
 type Enriched = {
@@ -104,6 +102,8 @@ export default function FeedScreen() {
       ) : (
         <FlatList
           data={loaded.items}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
           keyExtractor={(item) =>
             item.type === "session" ? `s:${item.session.id}` : `r:${item.rsvp.id}`
           }
@@ -148,34 +148,18 @@ function Row({
   commentCount: number;
 }) {
   if (item.type === "session") {
-    const s = item.session;
     return (
-      <View style={styles.row}>
-        <View style={styles.rowTopLine}>
-          <Text style={styles.rowText}>
-            <AuthorLink userId={item.userId} name={authorName} /> kited at{" "}
-            {spot ? <SpotLink slug={spot.slug} name={spot.name} /> : <Text>Unknown spot</Text>} for{" "}
-            <Text style={styles.mono}>{s.duration_minutes} min</Text>
-          </Text>
-        </View>
-        <View style={styles.rowMetaLine}>
-          <Text style={[styles.rowTimestamp, styles.rowTimestampReset]}>
-            {new Date(s.session_date).toLocaleDateString("en-NL", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-            })}{" "}
-            · {relativeTime(item.createdAt)}
-          </Text>
-          <SessionWindChip session={s} />
-        </View>
-        {s.notes ? <Text style={styles.rowNotes}>{s.notes}</Text> : null}
-        <PhotoGrid urls={photoUrls} />
-        <View style={styles.likeRow}>
-          <LikeButton sessionId={s.id} initialCount={likeCount} initialLiked={liked} />
-        </View>
-        <CommentSection sessionId={s.id} initialCount={commentCount} />
-      </View>
+      <SessionCard
+        session={item.session}
+        authorId={item.userId}
+        authorName={authorName}
+        spot={spot ?? null}
+        createdAtRelative={relativeTime(item.createdAt)}
+        photoUrls={photoUrls}
+        likeCount={likeCount}
+        liked={liked}
+        commentCount={commentCount}
+      />
     );
   }
   const r = item.rsvp;
@@ -217,37 +201,25 @@ function SpotLink({ slug, name }: { slug: string; name: string }) {
   );
 }
 
-function relativeTime(iso: string): string {
-  const diffMin = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin} min ago`;
-  const h = Math.round(diffMin / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.round(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString("en-NL", { month: "short", day: "numeric" });
-}
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: "#fafafa" },
   loader: { flex: 1, marginTop: 48 },
-  emptyBox: { margin: 20, padding: 24, borderWidth: 1, borderColor: "#e5e5e5", borderRadius: 8, alignItems: "center" },
+  emptyBox: { margin: 20, padding: 24, borderWidth: 1, borderColor: "#e5e5e5", borderRadius: 8, alignItems: "center", backgroundColor: "#fff" },
   emptyTitle: { fontSize: 15, fontWeight: "600" },
   emptyBody: { marginTop: 6, fontSize: 13, color: "#6b7280", textAlign: "center" },
+  listContent: { padding: 16 },
+  separator: { height: 12 },
   row: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#f0f0f0",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderColor: "#e4e4e7",
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: "#fff",
   },
-  rowTopLine: {},
   rowText: { fontSize: 14, color: "#18181b", lineHeight: 20 },
-  rowMetaLine: { marginTop: 4, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   rowTimestamp: { marginTop: 4, fontSize: 11, color: "#6b7280" },
-  rowTimestampReset: { marginTop: 0 },
-  rowNotes: { marginTop: 8, fontSize: 13, color: "#374151", lineHeight: 18 },
-  likeRow: { marginTop: 8 },
   link: { color: "#0369a1", fontWeight: "600" },
-  mono: { fontVariant: ["tabular-nums"] },
   semibold: { fontWeight: "600" },
 });

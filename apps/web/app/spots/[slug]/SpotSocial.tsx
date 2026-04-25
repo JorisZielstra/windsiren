@@ -26,7 +26,8 @@ import type { SessionRow } from "@windsiren/supabase";
 import { CommentSection } from "@/components/CommentSection";
 import { LikeButton } from "@/components/LikeButton";
 import { PhotoGrid } from "@/components/PhotoGrid";
-import { SessionWindChip } from "@/components/SessionWindChip";
+import { SessionCard } from "@/components/SessionCard";
+import { relativeTime } from "@/lib/relative-time";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Props = {
@@ -212,51 +213,24 @@ export function SpotSocial({ spot }: Props) {
             Nobody has logged a session here yet. Be the first.
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {sessions.map((s) => {
               const author = profiles.get(s.user_id);
               return (
-                <li
+                <SessionCard
                   key={s.id}
-                  className="rounded-md border border-zinc-200 px-4 py-3 dark:border-zinc-800"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <Link
-                      href={`/users/${s.user_id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {author?.display_name ?? "Someone"}
-                    </Link>
-                    <div className="text-sm text-zinc-500">{s.duration_minutes} min</div>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
-                    <span>
-                      {new Date(s.session_date).toLocaleDateString("en-NL", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                    <SessionWindChip session={s} />
-                  </div>
-                  {s.notes ? (
-                    <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
-                  ) : null}
-                  <PhotoGrid urls={photoUrlsBySession.get(s.id) ?? []} />
-                  <div className="mt-2">
-                    <LikeButton
-                      sessionId={s.id}
-                      initialCount={likeCounts.get(s.id) ?? 0}
-                      initialLiked={likedIds.has(s.id)}
-                      viewerId={userId}
-                    />
-                  </div>
-                  <CommentSection
-                    sessionId={s.id}
-                    initialCount={commentCounts.get(s.id) ?? 0}
-                    viewerId={userId}
-                  />
-                </li>
+                  session={s}
+                  authorId={s.user_id}
+                  authorName={author?.display_name ?? "Someone"}
+                  spot={null}
+                  showSpot={false}
+                  createdAtRelative={relativeTime(s.created_at)}
+                  photoUrls={photoUrlsBySession.get(s.id) ?? []}
+                  likeCount={likeCounts.get(s.id) ?? 0}
+                  liked={likedIds.has(s.id)}
+                  commentCount={commentCounts.get(s.id) ?? 0}
+                  viewerId={userId ?? undefined}
+                />
               );
             })}
           </ul>
