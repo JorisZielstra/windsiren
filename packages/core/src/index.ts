@@ -8,3 +8,4 @@ export * from "./profiles";
 export * from "./feed";
 export * from "./likes";
 export * from "./photos";
+export * from "./comments";

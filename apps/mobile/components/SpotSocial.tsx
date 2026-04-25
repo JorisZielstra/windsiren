@@ -17,6 +17,7 @@ import {
   createRsvp,
   createSession,
   deleteRsvp,
+  getCommentCounts,
   getLikeCounts,
   getLikedSessionIds,
   getPhotosForSessions,
@@ -31,6 +32,7 @@ import {
 import type { SessionRow } from "@windsiren/supabase";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
+import { CommentSection } from "./CommentSection";
 import { LikeButton } from "./LikeButton";
 import { PhotoGrid } from "./PhotoGrid";
 
@@ -60,6 +62,7 @@ export function SpotSocial({ spotId }: { spotId: string }) {
   const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [photoUrls, setPhotoUrls] = useState<Map<string, string[]>>(new Map());
+  const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map());
   const [showComposer, setShowComposer] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -76,15 +79,20 @@ export function SpotSocial({ spotId }: { spotId: string }) {
 
     const authorIds = Array.from(new Set(sessionsList.map((s) => s.user_id)));
     const sessionIds = sessionsList.map((s) => s.id);
-    const [authorProfiles, sessionLikeCounts, viewerLikedIds, sessionPhotos] = await Promise.all([
-      getPublicProfiles(supabase, authorIds),
-      getLikeCounts(supabase, sessionIds),
-      user ? getLikedSessionIds(supabase, user.id, sessionIds) : Promise.resolve(new Set<string>()),
-      getPhotosForSessions(supabase, sessionIds),
-    ]);
+    const [authorProfiles, sessionLikeCounts, viewerLikedIds, sessionPhotos, sessionCommentCounts] =
+      await Promise.all([
+        getPublicProfiles(supabase, authorIds),
+        getLikeCounts(supabase, sessionIds),
+        user
+          ? getLikedSessionIds(supabase, user.id, sessionIds)
+          : Promise.resolve(new Set<string>()),
+        getPhotosForSessions(supabase, sessionIds),
+        getCommentCounts(supabase, sessionIds),
+      ]);
     setProfiles(authorProfiles);
     setLikeCounts(sessionLikeCounts);
     setLikedIds(viewerLikedIds);
+    setCommentCounts(sessionCommentCounts);
     const urlMap = new Map<string, string[]>();
     for (const [sid, photos] of sessionPhotos) {
       urlMap.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
@@ -195,6 +203,7 @@ export function SpotSocial({ spotId }: { spotId: string }) {
                   initialLiked={likedIds.has(s.id)}
                 />
               </View>
+              <CommentSection sessionId={s.id} initialCount={commentCounts.get(s.id) ?? 0} />
             </View>
           );
         })

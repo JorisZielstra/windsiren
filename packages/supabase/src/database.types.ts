@@ -406,6 +406,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      session_comments: {
+        Row: {
+          id: string;
+          session_id: string;
+          user_id: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          user_id: string;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          user_id?: string;
+          body?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -435,3 +462,4 @@ export type FollowRow = Database["public"]["Tables"]["follows"]["Row"];
 export type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
 export type LikeRow = Database["public"]["Tables"]["likes"]["Row"];
 export type SessionPhotoRow = Database["public"]["Tables"]["session_photos"]["Row"];
+export type SessionCommentRow = Database["public"]["Tables"]["session_comments"]["Row"];

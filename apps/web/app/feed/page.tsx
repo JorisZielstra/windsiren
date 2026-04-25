@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   fetchPersonalFeed,
+  getCommentCounts,
   getLikeCounts,
   getLikedSessionIds,
   getPhotosForSessions,
@@ -9,6 +10,7 @@ import {
   getPublicProfiles,
   type FeedItem,
 } from "@windsiren/core";
+import { CommentSection } from "@/components/CommentSection";
 import { LikeButton } from "@/components/LikeButton";
 import { PhotoGrid } from "@/components/PhotoGrid";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -29,15 +31,17 @@ export default async function FeedPage() {
   const spotIds = Array.from(new Set(items.map((i) => i.spotId)));
   const sessionIds = items.filter((i) => i.type === "session").map((i) => i.session.id);
 
-  const [profiles, spotRes, likeCounts, likedSet, photosBySession] = await Promise.all([
-    getPublicProfiles(supabase, authorIds),
-    spotIds.length > 0
-      ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
-      : Promise.resolve({ data: [] }),
-    getLikeCounts(supabase, sessionIds),
-    getLikedSessionIds(supabase, user.id, sessionIds),
-    getPhotosForSessions(supabase, sessionIds),
-  ]);
+  const [profiles, spotRes, likeCounts, likedSet, photosBySession, commentCounts] =
+    await Promise.all([
+      getPublicProfiles(supabase, authorIds),
+      spotIds.length > 0
+        ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
+        : Promise.resolve({ data: [] }),
+      getLikeCounts(supabase, sessionIds),
+      getLikedSessionIds(supabase, user.id, sessionIds),
+      getPhotosForSessions(supabase, sessionIds),
+      getCommentCounts(supabase, sessionIds),
+    ]);
   const spotMap = new Map<string, { name: string; slug: string }>();
   for (const s of spotRes.data ?? []) spotMap.set(s.id, { name: s.name, slug: s.slug });
 
@@ -83,6 +87,9 @@ export default async function FeedPage() {
               photoUrls={
                 item.type === "session" ? photoUrlsBySession.get(item.session.id) ?? [] : []
               }
+              commentCount={
+                item.type === "session" ? commentCounts.get(item.session.id) ?? 0 : 0
+              }
             />
           ))}
         </ul>
@@ -103,6 +110,7 @@ function FeedRow({
   likeCount,
   liked,
   photoUrls,
+  commentCount,
 }: {
   item: FeedItem;
   authorName: string;
@@ -111,6 +119,7 @@ function FeedRow({
   likeCount: number;
   liked: boolean;
   photoUrls: string[];
+  commentCount: number;
 }) {
   const spotLabel = spot ? (
     <Link href={`/spots/${spot.slug}`} className="font-medium hover:underline">
@@ -147,7 +156,7 @@ function FeedRow({
           <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
         ) : null}
         <PhotoGrid urls={photoUrls} />
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-4">
           <LikeButton
             sessionId={s.id}
             initialCount={likeCount}
@@ -155,6 +164,7 @@ function FeedRow({
             viewerId={viewerId}
           />
         </div>
+        <CommentSection sessionId={s.id} initialCount={commentCount} viewerId={viewerId} />
       </li>
     );
   }

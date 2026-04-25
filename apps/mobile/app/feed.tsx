@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   fetchPersonalFeed,
+  getCommentCounts,
   getLikeCounts,
   getLikedSessionIds,
   getPhotosForSessions,
@@ -19,6 +20,7 @@ import {
   type FeedItem,
   type PublicProfile,
 } from "@windsiren/core";
+import { CommentSection } from "../components/CommentSection";
 import { LikeButton } from "../components/LikeButton";
 import { PhotoGrid } from "../components/PhotoGrid";
 import { useAuth } from "../lib/auth-context";
@@ -31,6 +33,7 @@ type Enriched = {
   likeCounts: Map<string, number>;
   likedIds: Set<string>;
   photoUrls: Map<string, string[]>;
+  commentCounts: Map<string, number>;
 };
 
 export default function FeedScreen() {
@@ -56,15 +59,17 @@ export default function FeedScreen() {
         const authorIds = Array.from(new Set(items.map((i) => i.userId)));
         const spotIds = Array.from(new Set(items.map((i) => i.spotId)));
         const sessionIds = items.filter((i) => i.type === "session").map((i) => i.session.id);
-        const [profiles, spotRes, likeCounts, likedIds, photosBySession] = await Promise.all([
-          getPublicProfiles(supabase, authorIds),
-          spotIds.length > 0
-            ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
-            : Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
-          getLikeCounts(supabase, sessionIds),
-          getLikedSessionIds(supabase, user.id, sessionIds),
-          getPhotosForSessions(supabase, sessionIds),
-        ]);
+        const [profiles, spotRes, likeCounts, likedIds, photosBySession, commentCounts] =
+          await Promise.all([
+            getPublicProfiles(supabase, authorIds),
+            spotIds.length > 0
+              ? supabase.from("spots").select("id, name, slug").in("id", spotIds)
+              : Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
+            getLikeCounts(supabase, sessionIds),
+            getLikedSessionIds(supabase, user.id, sessionIds),
+            getPhotosForSessions(supabase, sessionIds),
+            getCommentCounts(supabase, sessionIds),
+          ]);
         const spots = new Map<string, { name: string; slug: string }>();
         for (const s of spotRes.data ?? []) spots.set(s.id, { name: s.name, slug: s.slug });
         const photoUrls = new Map<string, string[]>();
@@ -72,7 +77,7 @@ export default function FeedScreen() {
           photoUrls.set(sid, photos.map((p) => getPhotoPublicUrl(supabase, p.storage_path)));
         }
         if (!cancelled)
-          setLoaded({ items, profiles, spots, likeCounts, likedIds, photoUrls });
+          setLoaded({ items, profiles, spots, likeCounts, likedIds, photoUrls, commentCounts });
       })();
       return () => {
         cancelled = true;
@@ -114,6 +119,9 @@ export default function FeedScreen() {
               photoUrls={
                 item.type === "session" ? loaded.photoUrls.get(item.session.id) ?? [] : []
               }
+              commentCount={
+                item.type === "session" ? loaded.commentCounts.get(item.session.id) ?? 0 : 0
+              }
             />
           )}
         />
@@ -129,6 +137,7 @@ function Row({
   likeCount,
   liked,
   photoUrls,
+  commentCount,
 }: {
   item: FeedItem;
   authorName: string;
@@ -136,6 +145,7 @@ function Row({
   likeCount: number;
   liked: boolean;
   photoUrls: string[];
+  commentCount: number;
 }) {
   if (item.type === "session") {
     const s = item.session;
@@ -161,6 +171,7 @@ function Row({
         <View style={styles.likeRow}>
           <LikeButton sessionId={s.id} initialCount={likeCount} initialLiked={liked} />
         </View>
+        <CommentSection sessionId={s.id} initialCount={commentCount} />
       </View>
     );
   }
