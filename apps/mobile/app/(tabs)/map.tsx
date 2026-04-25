@@ -1,4 +1,4 @@
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +12,7 @@ import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { dbRowToSpot, fetchTodayVerdict, type SpotWithVerdict } from "@windsiren/core";
 import type { Verdict } from "@windsiren/shared";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../../lib/supabase";
 
 const COLORS = {
   go: "#10b981",
@@ -53,7 +53,6 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Stack.Screen options={{ title: "Map" }} />
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>Failed to load: {error}</Text>

@@ -13,13 +13,10 @@ export default function RootLayout() {
             headerTitleStyle: { fontWeight: "600" },
           }}
         >
-          <Stack.Screen name="index" options={{ title: "WindSiren" }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="spots/[slug]" options={{ title: "" }} />
-          <Stack.Screen name="map" options={{ title: "Map" }} />
-          <Stack.Screen name="feed" options={{ title: "Feed" }} />
           <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
           <Stack.Screen name="sign-up" options={{ title: "Create account" }} />
-          <Stack.Screen name="profile" options={{ title: "Account" }} />
           <Stack.Screen name="profile-edit" options={{ title: "Edit profile" }} />
           <Stack.Screen name="users/[userId]" options={{ title: "" }} />
         </Stack>

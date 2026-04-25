@@ -1,4 +1,4 @@
-import { Link, router, Stack, useFocusEffect } from "expo-router";
+import { Link, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,11 +20,11 @@ import {
   type FeedItem,
   type PublicProfile,
 } from "@windsiren/core";
-import { CommentSection } from "../components/CommentSection";
-import { LikeButton } from "../components/LikeButton";
-import { PhotoGrid } from "../components/PhotoGrid";
-import { useAuth } from "../lib/auth-context";
-import { supabase } from "../lib/supabase";
+import { CommentSection } from "../../components/CommentSection";
+import { LikeButton } from "../../components/LikeButton";
+import { PhotoGrid } from "../../components/PhotoGrid";
+import { useAuth } from "../../lib/auth-context";
+import { supabase } from "../../lib/supabase";
 
 type Enriched = {
   items: FeedItem[];
@@ -91,7 +91,6 @@ export default function FeedScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Stack.Screen options={{ title: "Feed" }} />
       {!loaded ? (
         <ActivityIndicator style={styles.loader} size="large" />
       ) : loaded.items.length === 0 ? (

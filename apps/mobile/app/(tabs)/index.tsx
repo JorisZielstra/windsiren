@@ -1,4 +1,4 @@
-import { Link, Stack, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,8 +17,8 @@ import {
   peakWindMs,
   type SpotWithVerdict,
 } from "@windsiren/core";
-import { useAuth } from "../lib/auth-context";
-import { supabase } from "../lib/supabase";
+import { useAuth } from "../../lib/auth-context";
+import { supabase } from "../../lib/supabase";
 
 export default function SpotsListScreen() {
   const { user } = useAuth();
@@ -61,38 +61,13 @@ export default function SpotsListScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Stack.Screen
-        options={{
-          title: "WindSiren",
-          headerRight: () => (
-            <View style={styles.headerRight}>
-              <Link href="/map" asChild>
-                <Pressable>
-                  <Text style={styles.headerBtn}>Map</Text>
-                </Pressable>
-              </Link>
-              {user ? (
-                <Link href="/feed" asChild>
-                  <Pressable>
-                    <Text style={styles.headerBtn}>Feed</Text>
-                  </Pressable>
-                </Link>
-              ) : null}
-              <Link href={user ? "/profile" : "/sign-in"} asChild>
-                <Pressable>
-                  <Text style={styles.headerBtn}>{user ? "Profile" : "Sign in"}</Text>
-                </Pressable>
-              </Link>
-            </View>
-          ),
-        }}
-      />
       <View style={styles.header}>
+        <Text style={styles.title}>Today</Text>
         <Text style={styles.subtitle}>
           {error
             ? "Failed to load spots"
             : items
-              ? `${items.length} curated NL spots · today`
+              ? `${items.length} curated NL spots`
               : "Loading…"}
         </Text>
       </View>
@@ -184,9 +159,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e5e5e5",
   },
-  subtitle: { fontSize: 13, color: "#6b7280" },
-  headerBtn: { fontSize: 14, color: "#0369a1", fontWeight: "600", paddingHorizontal: 8 },
-  headerRight: { flexDirection: "row", alignItems: "center" },
+  title: { fontSize: 26, fontWeight: "700", color: "#18181b" },
+  subtitle: { fontSize: 13, color: "#6b7280", marginTop: 4 },
   favSection: {},
   sectionLabel: {
     fontSize: 10,

@@ -46,45 +46,12 @@ export default async function Home() {
   const favorites = withVerdicts.filter((item) => favoriteIds.has(item.spot.id));
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
-      <header className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight">WindSiren</h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-            {withVerdicts.length} curated NL kitesurf spots · today&apos;s forecast
-          </p>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <Link
-            href="/map"
-            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
-          >
-            Map →
-          </Link>
-          {user ? (
-            <>
-              <Link
-                href="/feed"
-                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
-              >
-                Feed
-              </Link>
-              <Link
-                href="/profile"
-                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
-              >
-                Profile
-              </Link>
-            </>
-          ) : (
-            <Link
-              href="/auth/sign-in"
-              className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
-              Sign in
-            </Link>
-          )}
-        </div>
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Today</h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          {withVerdicts.length} curated NL spots, sorted alphabetically.
+        </p>
       </header>
 
       {user && favorites.length > 0 ? (

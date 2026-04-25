@@ -2,8 +2,8 @@ import { Link, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../lib/auth-context";
-import { supabase } from "../lib/supabase";
+import { useAuth } from "../../lib/auth-context";
+import { supabase } from "../../lib/supabase";
 
 type ProfileRow = {
   display_name: string | null;
