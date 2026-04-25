@@ -144,7 +144,7 @@ export default async function SpotDetailPage({
         </div>
       )}
 
-      <SpotSocial spotId={spot.id} />
+      <SpotSocial spot={spot} />
     </main>
   );
 }

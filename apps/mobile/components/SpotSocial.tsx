@@ -26,15 +26,18 @@ import {
   isUserRsvpdForDay,
   listSessionsForSpot,
   MAX_PHOTOS_PER_SESSION,
+  summarizeWindForToday,
   uploadSessionPhoto,
   type PublicProfile,
 } from "@windsiren/core";
+import type { Spot } from "@windsiren/shared";
 import type { SessionRow } from "@windsiren/supabase";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 import { CommentSection } from "./CommentSection";
 import { LikeButton } from "./LikeButton";
 import { PhotoGrid } from "./PhotoGrid";
+import { SessionWindChip } from "./SessionWindChip";
 
 type DayOffset = 0 | 1 | 2;
 
@@ -52,7 +55,8 @@ function dayLabel(offset: DayOffset): string {
   return d.toLocaleDateString("en-NL", { weekday: "long" });
 }
 
-export function SpotSocial({ spotId }: { spotId: string }) {
+export function SpotSocial({ spot }: { spot: Spot }) {
+  const spotId = spot.id;
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -187,13 +191,16 @@ export function SpotSocial({ spotId }: { spotId: string }) {
                 </Link>
                 <Text style={styles.sessionDuration}>{s.duration_minutes} min</Text>
               </View>
-              <Text style={styles.sessionDate}>
-                {new Date(s.session_date).toLocaleDateString("en-NL", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </Text>
+              <View style={styles.sessionMetaLine}>
+                <Text style={styles.sessionDate}>
+                  {new Date(s.session_date).toLocaleDateString("en-NL", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </Text>
+                <SessionWindChip session={s} />
+              </View>
               {s.notes ? <Text style={styles.sessionNotes}>{s.notes}</Text> : null}
               <PhotoGrid urls={photoUrls.get(s.id) ?? []} />
               <View style={{ marginTop: 8 }}>
@@ -217,7 +224,7 @@ export function SpotSocial({ spotId }: { spotId: string }) {
       >
         {showComposer && user ? (
           <SessionComposer
-            spotId={spotId}
+            spot={spot}
             userId={user.id}
             onClose={() => setShowComposer(false)}
             onCreated={() => {
@@ -232,16 +239,17 @@ export function SpotSocial({ spotId }: { spotId: string }) {
 }
 
 function SessionComposer({
-  spotId,
+  spot,
   userId,
   onClose,
   onCreated,
 }: {
-  spotId: string;
+  spot: Spot;
   userId: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const spotId = spot.id;
   const [selectedOffset, setSelectedOffset] = useState<DayOffset>(0);
   const [duration, setDuration] = useState("60");
   const [notes, setNotes] = useState("");
@@ -270,12 +278,23 @@ function SessionComposer({
     setBusy(true);
     setError(null);
     const mins = parseInt(duration, 10);
+
+    // For today's sessions, pull a wind summary from Open-Meteo (only —
+    // backdated archive lookup is a follow-up).
+    const sessionDate = dateKeyForOffset(selectedOffset);
+    const isToday = sessionDate === dateKeyForOffset(0);
+    const wind = isToday ? await summarizeWindForToday(spot) : null;
+
     const result = await createSession(supabase, {
       userId,
       spotId,
-      sessionDate: dateKeyForOffset(selectedOffset),
+      sessionDate,
       durationMinutes: mins,
       notes: notes.trim() || null,
+      windAvgMs: wind?.windAvgMs ?? null,
+      windMaxMs: wind?.windMaxMs ?? null,
+      windDirAvgDeg: wind ? Math.round(wind.windDirAvgDeg) : null,
+      gustMaxMs: wind?.gustMaxMs ?? null,
     });
     if (!result.ok) {
       setBusy(false);
@@ -419,7 +438,8 @@ const styles = StyleSheet.create({
   sessionTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sessionAuthor: { fontSize: 14, fontWeight: "600", color: "#0369a1" },
   sessionDuration: { fontSize: 13, color: "#6b7280", fontVariant: ["tabular-nums"] },
-  sessionDate: { fontSize: 11, color: "#6b7280", marginTop: 2 },
+  sessionDate: { fontSize: 11, color: "#6b7280" },
+  sessionMetaLine: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   sessionNotes: { fontSize: 13, color: "#374151", marginTop: 8, lineHeight: 18 },
   modalBackdrop: {
     flex: 1,

@@ -24,6 +24,7 @@ import {
 } from "@windsiren/core";
 import type { RsvpRow, SessionRow } from "@windsiren/supabase";
 import { PhotoGrid } from "../../components/PhotoGrid";
+import { SessionWindChip } from "../../components/SessionWindChip";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
@@ -183,13 +184,16 @@ export default function UserProfileScreen() {
                 <Text style={styles.rowTitle}>{spot?.name ?? "Unknown spot"}</Text>
                 <Text style={styles.rowDuration}>{item.duration_minutes} min</Text>
               </View>
-              <Text style={styles.rowSub}>
-                {new Date(item.session_date).toLocaleDateString("en-NL", {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </Text>
+              <View style={styles.rowMetaLine}>
+                <Text style={styles.rowSub}>
+                  {new Date(item.session_date).toLocaleDateString("en-NL", {
+                    weekday: "long",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </Text>
+                <SessionWindChip session={item} />
+              </View>
               {item.notes ? <Text style={styles.rowNotes}>{item.notes}</Text> : null}
               <PhotoGrid urls={loaded.photoUrls.get(item.id) ?? []} />
             </View>
@@ -263,6 +267,7 @@ const styles = StyleSheet.create({
   rowTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rowTitle: { fontSize: 15, fontWeight: "500" },
   rowDuration: { fontSize: 13, color: "#6b7280", fontVariant: ["tabular-nums"] },
-  rowSub: { fontSize: 11, color: "#6b7280", marginTop: 2 },
+  rowSub: { fontSize: 11, color: "#6b7280" },
+  rowMetaLine: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   rowNotes: { fontSize: 13, color: "#374151", marginTop: 6, lineHeight: 18 },
 });

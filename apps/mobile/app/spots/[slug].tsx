@@ -177,7 +177,7 @@ export default function SpotDetailScreen() {
               tides={loaded.tidesPerDay[i] ?? []}
             />
           ))}
-          <SpotSocial spotId={loaded.spot.id} />
+          <SpotSocial spot={loaded.spot} />
           <View style={{ height: 40 }} />
         </ScrollView>
       )}

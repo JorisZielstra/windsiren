@@ -16,18 +16,21 @@ import {
   isUserRsvpdForDay,
   listSessionsForSpot,
   MAX_PHOTOS_PER_SESSION,
+  summarizeWindForToday,
   uploadSessionPhoto,
   type PublicProfile,
 } from "@windsiren/core";
+import type { Spot } from "@windsiren/shared";
 import type { SessionPhotoRow } from "@windsiren/supabase";
 import type { SessionRow } from "@windsiren/supabase";
 import { CommentSection } from "@/components/CommentSection";
 import { LikeButton } from "@/components/LikeButton";
 import { PhotoGrid } from "@/components/PhotoGrid";
+import { SessionWindChip } from "@/components/SessionWindChip";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Props = {
-  spotId: string;
+  spot: Spot;
 };
 
 type DayOffset = 0 | 1 | 2;
@@ -47,7 +50,8 @@ function dayLabel(offset: DayOffset): string {
   return d.toLocaleDateString("en-NL", { weekday: "long" });
 }
 
-export function SpotSocial({ spotId }: Props) {
+export function SpotSocial({ spot }: Props) {
+  const spotId = spot.id;
   const supabase = createSupabaseBrowserClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -225,12 +229,15 @@ export function SpotSocial({ spotId }: Props) {
                     </Link>
                     <div className="text-sm text-zinc-500">{s.duration_minutes} min</div>
                   </div>
-                  <div className="mt-0.5 text-xs text-zinc-500">
-                    {new Date(s.session_date).toLocaleDateString("en-NL", {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
+                    <span>
+                      {new Date(s.session_date).toLocaleDateString("en-NL", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <SessionWindChip session={s} />
                   </div>
                   {s.notes ? (
                     <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>
@@ -258,7 +265,7 @@ export function SpotSocial({ spotId }: Props) {
 
       {showComposer && userId ? (
         <SessionComposer
-          spotId={spotId}
+          spot={spot}
           userId={userId}
           onClose={() => setShowComposer(false)}
           onCreated={() => {
@@ -272,12 +279,12 @@ export function SpotSocial({ spotId }: Props) {
 }
 
 function SessionComposer({
-  spotId,
+  spot,
   userId,
   onClose,
   onCreated,
 }: {
-  spotId: string;
+  spot: Spot;
   userId: string;
   onClose: () => void;
   onCreated: () => void;
@@ -300,12 +307,22 @@ function SessionComposer({
     setBusy(true);
     setError(null);
     const mins = parseInt(duration, 10);
+
+    // For today's sessions only, pull a wind summary from Open-Meteo. Backdated
+    // sessions skip this — backfill via archive API is a follow-up.
+    const isToday = date === dateKeyForOffset(0);
+    const wind = isToday ? await summarizeWindForToday(spot) : null;
+
     const result = await createSession(supabase, {
       userId,
-      spotId,
+      spotId: spot.id,
       sessionDate: date,
       durationMinutes: mins,
       notes: notes.trim() || null,
+      windAvgMs: wind?.windAvgMs ?? null,
+      windMaxMs: wind?.windMaxMs ?? null,
+      windDirAvgDeg: wind ? Math.round(wind.windDirAvgDeg) : null,
+      gustMaxMs: wind?.gustMaxMs ?? null,
     });
     if (!result.ok) {
       setBusy(false);

@@ -10,6 +10,7 @@ import {
   listUserRsvps,
 } from "@windsiren/core";
 import { PhotoGrid } from "@/components/PhotoGrid";
+import { SessionWindChip } from "@/components/SessionWindChip";
 import { FollowButton } from "./FollowButton";
 
 export const dynamic = "force-dynamic";
@@ -161,12 +162,15 @@ export default async function UserProfilePage({
                       {s.duration_minutes} min
                     </div>
                   </div>
-                  <div className="mt-0.5 text-xs text-zinc-500">
-                    {new Date(s.session_date).toLocaleDateString("en-NL", {
-                      weekday: "long",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
+                    <span>
+                      {new Date(s.session_date).toLocaleDateString("en-NL", {
+                        weekday: "long",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <SessionWindChip session={s} />
                   </div>
                   {s.notes ? (
                     <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{s.notes}</p>

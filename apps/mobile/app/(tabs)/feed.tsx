@@ -23,6 +23,7 @@ import {
 import { CommentSection } from "../../components/CommentSection";
 import { LikeButton } from "../../components/LikeButton";
 import { PhotoGrid } from "../../components/PhotoGrid";
+import { SessionWindChip } from "../../components/SessionWindChip";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
@@ -157,14 +158,17 @@ function Row({
             <Text style={styles.mono}>{s.duration_minutes} min</Text>
           </Text>
         </View>
-        <Text style={styles.rowTimestamp}>
-          {new Date(s.session_date).toLocaleDateString("en-NL", {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-          })}{" "}
-          · {relativeTime(item.createdAt)}
-        </Text>
+        <View style={styles.rowMetaLine}>
+          <Text style={[styles.rowTimestamp, styles.rowTimestampReset]}>
+            {new Date(s.session_date).toLocaleDateString("en-NL", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            })}{" "}
+            · {relativeTime(item.createdAt)}
+          </Text>
+          <SessionWindChip session={s} />
+        </View>
         {s.notes ? <Text style={styles.rowNotes}>{s.notes}</Text> : null}
         <PhotoGrid urls={photoUrls} />
         <View style={styles.likeRow}>
@@ -238,7 +242,9 @@ const styles = StyleSheet.create({
   },
   rowTopLine: {},
   rowText: { fontSize: 14, color: "#18181b", lineHeight: 20 },
+  rowMetaLine: { marginTop: 4, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   rowTimestamp: { marginTop: 4, fontSize: 11, color: "#6b7280" },
+  rowTimestampReset: { marginTop: 0 },
   rowNotes: { marginTop: 8, fontSize: 13, color: "#374151", lineHeight: 18 },
   likeRow: { marginTop: 8 },
   link: { color: "#0369a1", fontWeight: "600" },

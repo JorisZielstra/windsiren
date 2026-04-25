@@ -339,6 +339,10 @@ export type Database = {
           session_date: string;
           duration_minutes: number;
           notes: string | null;
+          wind_avg_ms: number | null;
+          wind_max_ms: number | null;
+          wind_dir_avg_deg: number | null;
+          gust_max_ms: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -349,6 +353,10 @@ export type Database = {
           session_date: string;
           duration_minutes: number;
           notes?: string | null;
+          wind_avg_ms?: number | null;
+          wind_max_ms?: number | null;
+          wind_dir_avg_deg?: number | null;
+          gust_max_ms?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -359,6 +367,10 @@ export type Database = {
           session_date?: string;
           duration_minutes?: number;
           notes?: string | null;
+          wind_avg_ms?: number | null;
+          wind_max_ms?: number | null;
+          wind_dir_avg_deg?: number | null;
+          gust_max_ms?: number | null;
           created_at?: string;
           updated_at?: string;
         };
