@@ -113,6 +113,28 @@ export function peakWindMs(hours: HourlyForecast[]): number | null {
   return Math.max(...hours.map((h) => h.windSpeedMs));
 }
 
+// Picks the most-relevant spot to feature on a "today" hero. Score:
+// go > marginal > no_go > no-data. Tiebreaker: higher peak wind wins.
+// Returns null only if the input list is empty.
+export function pickHeroSpot<T extends SpotWithVerdict>(items: T[]): T | null {
+  if (items.length === 0) return null;
+  const score = (decision: "go" | "marginal" | "no_go" | undefined): number => {
+    if (decision === "go") return 3;
+    if (decision === "marginal") return 2;
+    if (decision === "no_go") return 1;
+    return 0;
+  };
+  return items.reduce((best, current) => {
+    const bestScore = score(best.verdict?.decision);
+    const curScore = score(current.verdict?.decision);
+    if (curScore > bestScore) return current;
+    if (curScore < bestScore) return best;
+    const bestPeak = peakWindMs(best.hours) ?? 0;
+    const curPeak = peakWindMs(current.hours) ?? 0;
+    return curPeak > bestPeak ? current : best;
+  });
+}
+
 const NL_TZ = "Europe/Amsterdam";
 
 export function groupHoursByLocalDay(hours: HourlyForecast[]): DayGroup[] {

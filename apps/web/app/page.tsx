@@ -6,9 +6,11 @@ import {
   fetchFavoriteSpotIds,
   fetchTodayVerdict,
   peakWindMs,
+  pickHeroSpot,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import { msToKnots } from "@windsiren/shared";
+import { HeroSpotCard } from "@/components/HeroSpotCard";
 
 // Dynamic because we fetch live forecasts on every request.
 // TODO: add `next.revalidate = 300` after we're sure the UX works, for 5-min caching.
@@ -45,22 +47,27 @@ export default async function Home() {
   const favoriteIds = user ? await fetchFavoriteSpotIds(authed, user.id) : new Set<string>();
   const favorites = withVerdicts.filter((item) => favoriteIds.has(item.spot.id));
 
+  // Hero: best favorite if any, else best across all NL spots.
+  const heroPool = favorites.length > 0 ? favorites : withVerdicts;
+  const hero = pickHeroSpot(heroPool);
+  const restOfFavorites = favorites.filter((f) => f.spot.id !== hero?.spot.id);
+  const restOfAll = withVerdicts.filter((item) => item.spot.id !== hero?.spot.id);
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Today</h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          {withVerdicts.length} curated NL spots, sorted alphabetically.
-        </p>
-      </header>
+      {hero ? (
+        <section className="mb-10">
+          <HeroSpotCard item={hero} />
+        </section>
+      ) : null}
 
-      {user && favorites.length > 0 ? (
+      {user && restOfFavorites.length > 0 ? (
         <section className="mb-10">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Your spots
           </h2>
           <ul className="space-y-2">
-            {favorites.map((item) => (
+            {restOfFavorites.map((item) => (
               <SpotRow key={item.spot.id} item={item} />
             ))}
           </ul>
@@ -71,7 +78,7 @@ export default async function Home() {
         All NL spots
       </h2>
       <ul className="space-y-2">
-        {withVerdicts.map(({ spot, verdict, hours }) => {
+        {restOfAll.map(({ spot, verdict, hours }) => {
           const peak = peakWindMs(hours);
           return (
             <li

@@ -15,8 +15,10 @@ import {
   fetchFavoriteSpotIds,
   fetchTodayVerdict,
   peakWindMs,
+  pickHeroSpot,
   type SpotWithVerdict,
 } from "@windsiren/core";
+import { HeroSpotCard } from "../../components/HeroSpotCard";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
@@ -58,20 +60,13 @@ export default function SpotsListScreen() {
   );
 
   const favoriteItems = items?.filter((i) => favoriteIds.has(i.spot.id)) ?? [];
+  const heroPool = favoriteItems.length > 0 ? favoriteItems : (items ?? []);
+  const hero = pickHeroSpot(heroPool);
+  const restOfFavorites = favoriteItems.filter((f) => f.spot.id !== hero?.spot.id);
+  const restOfAll = (items ?? []).filter((i) => i.spot.id !== hero?.spot.id);
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Today</Text>
-        <Text style={styles.subtitle}>
-          {error
-            ? "Failed to load spots"
-            : items
-              ? `${items.length} curated NL spots`
-              : "Loading…"}
-        </Text>
-      </View>
-
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>Something went wrong</Text>
@@ -81,19 +76,22 @@ export default function SpotsListScreen() {
         <ActivityIndicator style={styles.loader} size="large" />
       ) : (
         <FlatList
-          data={items}
+          data={restOfAll}
           keyExtractor={(item) => item.spot.id}
           renderItem={({ item }) => <SpotRow item={item} />}
           ListHeaderComponent={
-            user && favoriteItems.length > 0 ? (
-              <View style={styles.favSection}>
-                <Text style={styles.sectionLabel}>Your spots</Text>
-                {favoriteItems.map((item) => (
-                  <SpotRow key={item.spot.id} item={item} />
-                ))}
-                <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>All NL spots</Text>
-              </View>
-            ) : null
+            <View>
+              {hero ? <HeroSpotCard item={hero} /> : null}
+              {user && restOfFavorites.length > 0 ? (
+                <View style={styles.favSection}>
+                  <Text style={styles.sectionLabel}>Your spots</Text>
+                  {restOfFavorites.map((item) => (
+                    <SpotRow key={item.spot.id} item={item} />
+                  ))}
+                </View>
+              ) : null}
+              <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>All NL spots</Text>
+            </View>
           }
         />
       )}
