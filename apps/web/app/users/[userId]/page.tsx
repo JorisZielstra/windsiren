@@ -6,6 +6,7 @@ import {
   getFollowCounts,
   getLikeCounts,
   getLikedSessionIds,
+  getMonthlySessions,
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfile,
@@ -14,6 +15,7 @@ import {
   listUserRsvps,
 } from "@windsiren/core";
 import { Avatar } from "@/components/Avatar";
+import { MonthlySessionsChart } from "@/components/MonthlySessionsChart";
 import { SessionCard } from "@/components/SessionCard";
 import { UserStatsPanel } from "@/components/UserStatsPanel";
 import { relativeTime } from "@/lib/relative-time";
@@ -29,12 +31,13 @@ export default async function UserProfilePage({
   const { userId } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [profile, counts, sessions, rsvps, stats] = await Promise.all([
+  const [profile, counts, sessions, rsvps, stats, monthly] = await Promise.all([
     getPublicProfile(supabase, userId),
     getFollowCounts(supabase, userId),
     listSessionsForUser(supabase, userId, 20),
     listUserRsvps(supabase, userId, 20),
     getUserStats(supabase, userId),
+    getMonthlySessions(supabase, userId, 12),
   ]);
 
   if (!profile) notFound();
@@ -126,6 +129,13 @@ export default async function UserProfilePage({
           topSpotName={stats.topSpot ? spotMap.get(stats.topSpot.spotId)?.name ?? null : null}
           topSpotSlug={stats.topSpot ? spotMap.get(stats.topSpot.spotId)?.slug ?? null : null}
         />
+      </section>
+
+      <section className="mb-10">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Sessions per month
+        </h2>
+        <MonthlySessionsChart buckets={monthly} />
       </section>
 
       <section className="mb-10">

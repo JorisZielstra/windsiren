@@ -15,6 +15,7 @@ import {
   getFollowCounts,
   getLikeCounts,
   getLikedSessionIds,
+  getMonthlySessions,
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfile,
@@ -24,11 +25,13 @@ import {
   listUserRsvps,
   unfollowUser,
   type FollowCounts,
+  type MonthlySessionsBucket,
   type PublicProfile,
   type UserStats,
 } from "@windsiren/core";
 import type { RsvpRow, SessionRow } from "@windsiren/supabase";
 import { Avatar } from "../../components/Avatar";
+import { MonthlySessionsChart } from "../../components/MonthlySessionsChart";
 import { SessionCard } from "../../components/SessionCard";
 import { UserStatsPanel } from "../../components/UserStatsPanel";
 import { useAuth } from "../../lib/auth-context";
@@ -46,6 +49,7 @@ type Loaded = {
   likedIds: Set<string>;
   commentCounts: Map<string, number>;
   stats: UserStats;
+  monthly: MonthlySessionsBucket[];
 };
 
 export default function UserProfileScreen() {
@@ -60,12 +64,13 @@ export default function UserProfileScreen() {
     setError(null);
     (async () => {
       try {
-        const [profile, counts, sessions, rsvps, stats] = await Promise.all([
+        const [profile, counts, sessions, rsvps, stats, monthly] = await Promise.all([
           getPublicProfile(supabase, userId),
           getFollowCounts(supabase, userId),
           listSessionsForUser(supabase, userId, 20),
           listUserRsvps(supabase, userId, 20),
           getUserStats(supabase, userId),
+          getMonthlySessions(supabase, userId, 12),
         ]);
         if (cancelled) return;
         if (!profile) {
@@ -118,6 +123,7 @@ export default function UserProfileScreen() {
             likedIds,
             commentCounts,
             stats,
+            monthly,
           });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -206,6 +212,11 @@ export default function UserProfileScreen() {
                     : null
                 }
               />
+            </View>
+
+            <Text style={styles.sectionLabel}>Sessions per month</Text>
+            <View style={styles.chartWrap}>
+              <MonthlySessionsChart buckets={loaded.monthly} />
             </View>
 
             {loaded.upcomingRsvps.length > 0 ? (
@@ -328,5 +339,6 @@ const styles = StyleSheet.create({
   rowSub: { fontSize: 11, color: "#6b7280" },
   cardWrap: { paddingHorizontal: 16 },
   statsWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  chartWrap: { paddingHorizontal: 16, paddingBottom: 12 },
   separator: { height: 12 },
 });

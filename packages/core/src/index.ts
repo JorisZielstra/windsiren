@@ -16,3 +16,4 @@ export * from "./friends-today";
 export * from "./sun-times";
 export * from "./wind-trend";
 export * from "./day-verdicts";
+export * from "./monthly-sessions";
