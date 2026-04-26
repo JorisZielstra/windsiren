@@ -5,7 +5,7 @@ import {
   dbRowToSpot,
   fetchFavoriteSpotIds,
   fetchPersonalFeed,
-  fetchTodayVerdict,
+  fetchSpotWeek,
   getCommentCounts,
   getFriendsOnWaterToday,
   getLikeCounts,
@@ -15,6 +15,7 @@ import {
   getPublicProfiles,
   peakWindMs,
   pickHeroSpot,
+  type SpotWeek,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import { msToKnots } from "@windsiren/shared";
@@ -49,9 +50,19 @@ export default async function Home() {
   }
 
   const spots = (rows ?? []).map(dbRowToSpot);
-  const withVerdicts = await Promise.all(spots.map(fetchTodayVerdict));
+  const spotWeeks = await Promise.all(spots.map((s) => fetchSpotWeek(s, 7)));
 
   const todayKey = nlLocalDateKey(new Date());
+
+  // Today's verdicts derived from the partitioned week (no extra fetch).
+  const withVerdicts: SpotWithVerdict[] = spotWeeks.map((week) => {
+    const today = week.days.find((d) => d.dateKey === todayKey) ?? week.days[0];
+    return {
+      spot: week.spot,
+      verdict: today?.verdict ?? null,
+      hours: today?.hours ?? [],
+    };
+  });
 
   const [favoriteIds, friendsToday] = await Promise.all([
     user ? fetchFavoriteSpotIds(authed, user.id) : Promise.resolve(new Set<string>()),
@@ -71,11 +82,6 @@ export default async function Home() {
     (item) => item.spot.id !== bestSpot?.spot.id && !favoriteIds.has(item.spot.id),
   );
 
-  const todayLabel = new Date().toLocaleDateString("en-NL", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
 
   // Personal feed (signed-in only) — top 5 items, with a link to the full feed.
   const feedItems = user
@@ -120,9 +126,8 @@ export default async function Home() {
     <main className="mx-auto max-w-3xl px-6 py-12">
       <section className="mb-8">
         <TodayDashboard
-          withVerdicts={withVerdicts}
-          bestSpot={bestSpot}
-          todayLabel={todayLabel}
+          spotWeeks={spotWeeks}
+          todayKey={todayKey}
           friendsCount={friendsToday.count}
           friendsPreview={friendsToday.profiles}
           signedIn={!!user}

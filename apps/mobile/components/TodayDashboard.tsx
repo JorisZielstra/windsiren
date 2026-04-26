@@ -1,10 +1,12 @@
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   averageDirectionDeg,
   classifyWindTrend,
   getSunTimes,
   type PublicProfile,
+  type SpotWeek,
   type SpotWithVerdict,
   type WindTrend,
 } from "@windsiren/core";
@@ -18,34 +20,55 @@ import {
 import { DirectionNeedle } from "./DirectionNeedle";
 
 type Props = {
-  withVerdicts: SpotWithVerdict[];
-  bestSpot: SpotWithVerdict | null;
-  todayLabel: string;
+  spotWeeks: SpotWeek[];
+  todayKey: string;
   friendsCount: number;
   friendsPreview: PublicProfile[];
   signedIn: boolean;
 };
 
 export function TodayDashboard({
-  withVerdicts,
-  bestSpot,
-  todayLabel,
+  spotWeeks,
+  todayKey,
   friendsCount,
   friendsPreview,
   signedIn,
 }: Props) {
-  const total = withVerdicts.length;
-  const goCount = withVerdicts.filter((v) => v.verdict?.decision === "go").length;
+  const dateKeys = useMemo(() => collectDateKeys(spotWeeks), [spotWeeks]);
+  const [selectedDate, setSelectedDate] = useState<string>(
+    dateKeys.includes(todayKey) ? todayKey : (dateKeys[0] ?? todayKey),
+  );
+
+  const dayItems: SpotWithVerdict[] = useMemo(
+    () =>
+      spotWeeks.map((week) => {
+        const day = week.days.find((d) => d.dateKey === selectedDate);
+        return {
+          spot: week.spot,
+          verdict: day?.verdict ?? null,
+          hours: day?.hours ?? [],
+        };
+      }),
+    [spotWeeks, selectedDate],
+  );
+
+  const total = dayItems.length;
+  const goCount = dayItems.filter((v) => v.verdict?.decision === "go").length;
   const dayScore = total > 0 ? Math.round((goCount / total) * 100) : 0;
   const dayLabel = labelForScore(dayScore);
   const scoreAccent = dayScore >= 40;
+
+  const bestSpot = pickBestSpot(dayItems);
+  const isToday = selectedDate === todayKey;
+  const dateLabel = formatDateLabel(selectedDate, isToday);
+  const weekScores = useMemo(() => buildWeekScores(spotWeeks, dateKeys), [spotWeeks, dateKeys]);
 
   return (
     <View style={styles.card}>
       <View style={styles.heroSection}>
         <View style={styles.heroTopRow}>
-          <Text style={styles.todayBadge}>TODAY</Text>
-          <Text style={styles.todayDate}>{todayLabel}</Text>
+          <Text style={styles.todayBadge}>CONDITIONS SCORE</Text>
+          <Text style={styles.todayDate}>{dateLabel}</Text>
         </View>
 
         {total === 0 ? (
@@ -90,21 +113,106 @@ export function TodayDashboard({
         )}
       </View>
 
+      <WeekStrip
+        dateKeys={dateKeys}
+        weekScores={weekScores}
+        selectedDate={selectedDate}
+        todayKey={todayKey}
+        onSelect={setSelectedDate}
+      />
+
       <View style={styles.tileGrid}>
         <WindTile bestSpot={bestSpot} />
         <AirTempTile bestSpot={bestSpot} />
         {signedIn ? (
-          <FriendsTile count={friendsCount} preview={friendsPreview} />
+          <FriendsTile count={friendsCount} preview={friendsPreview} isToday={isToday} />
         ) : (
           <SignInTile />
         )}
-        <PeakWindowTile withVerdicts={withVerdicts} bestSpot={bestSpot} />
-        <DaylightTile bestSpot={bestSpot} />
+        <PeakWindowTile dayItems={dayItems} bestSpot={bestSpot} />
+        <DaylightTile bestSpot={bestSpot} selectedDate={selectedDate} />
         <TrendTile bestSpot={bestSpot} />
       </View>
     </View>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Week strip
+// ---------------------------------------------------------------------------
+
+function WeekStrip({
+  dateKeys,
+  weekScores,
+  selectedDate,
+  todayKey,
+  onSelect,
+}: {
+  dateKeys: string[];
+  weekScores: Map<string, { score: number; goCount: number; total: number }>;
+  selectedDate: string;
+  todayKey: string;
+  onSelect: (dateKey: string) => void;
+}) {
+  if (dateKeys.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.weekStrip}
+    >
+      {dateKeys.map((dateKey) => {
+        const stats = weekScores.get(dateKey);
+        const score = stats?.score ?? 0;
+        const isSelected = dateKey === selectedDate;
+        const isToday = dateKey === todayKey;
+        const accentBg = scoreAccentColor(score);
+        return (
+          <Pressable
+            key={dateKey}
+            onPress={() => onSelect(dateKey)}
+            style={[styles.weekChip, isSelected && styles.weekChipSelected]}
+          >
+            <Text
+              style={[
+                styles.weekChipDay,
+                isSelected
+                  ? styles.weekChipDaySelected
+                  : isToday
+                    ? styles.weekChipDayToday
+                    : null,
+              ]}
+            >
+              {isToday ? "TODAY" : weekdayShort(dateKey)}
+            </Text>
+            <Text
+              style={[styles.weekChipScore, isSelected && styles.weekChipScoreSelected]}
+            >
+              {score}
+            </Text>
+            <View
+              style={[
+                styles.weekChipBar,
+                isSelected ? styles.weekChipBarSelected : { backgroundColor: accentBg },
+              ]}
+            />
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function scoreAccentColor(score: number): string {
+  if (score >= 70) return "#10b981";
+  if (score >= 40) return "#6ee7b7";
+  if (score >= 20) return "#fcd34d";
+  return "#d4d4d8";
+}
+
+// ---------------------------------------------------------------------------
+// Tiles
+// ---------------------------------------------------------------------------
 
 function WindTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   if (!bestSpot) return <Tile label="WIND">—</Tile>;
@@ -141,10 +249,19 @@ function AirTempTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
 function FriendsTile({
   count,
   preview,
+  isToday,
 }: {
   count: number;
   preview: PublicProfile[];
+  isToday: boolean;
 }) {
+  if (!isToday) {
+    return (
+      <Tile label="FRIENDS" sub="today only">
+        <Text style={[styles.tileValue, styles.tileMuted]}>—</Text>
+      </Tile>
+    );
+  }
   const names = preview.slice(0, 2).map((p) => p.display_name ?? "Someone");
   const extra = Math.max(0, count - names.length);
   return (
@@ -173,17 +290,17 @@ function SignInTile() {
 }
 
 function PeakWindowTile({
-  withVerdicts,
+  dayItems,
   bestSpot,
 }: {
-  withVerdicts: SpotWithVerdict[];
+  dayItems: SpotWithVerdict[];
   bestSpot: SpotWithVerdict | null;
 }) {
   if (!bestSpot) return <Tile label="PEAK WINDOW">—</Tile>;
   const window = longestRideableRun(bestSpot);
   let peakGustMs = 0;
   let peakGustSpotName: string | null = null;
-  for (const v of withVerdicts) {
+  for (const v of dayItems) {
     for (const h of v.hours) {
       if (h.gustMs > peakGustMs) {
         peakGustMs = h.gustMs;
@@ -210,12 +327,18 @@ function PeakWindowTile({
   );
 }
 
-function DaylightTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function DaylightTile({
+  bestSpot,
+  selectedDate,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  selectedDate: string;
+}) {
   if (!bestSpot) return <Tile label="DAYLIGHT">—</Tile>;
   const { sunrise, sunset } = getSunTimes(
     bestSpot.spot.lat,
     bestSpot.spot.lng,
-    new Date(),
+    new Date(`${selectedDate}T12:00:00Z`),
   );
   const lengthMs = sunset.getTime() - sunrise.getTime();
   const hours = Math.floor(lengthMs / 3600000);
@@ -248,6 +371,10 @@ function TrendTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Building blocks + helpers
+// ---------------------------------------------------------------------------
+
 function Tile({
   label,
   sub,
@@ -274,6 +401,67 @@ function Tile({
       ) : null}
     </View>
   );
+}
+
+function collectDateKeys(spotWeeks: SpotWeek[]): string[] {
+  const keys = new Set<string>();
+  for (const w of spotWeeks) for (const d of w.days) keys.add(d.dateKey);
+  return Array.from(keys).sort();
+}
+
+function buildWeekScores(
+  spotWeeks: SpotWeek[],
+  dateKeys: string[],
+): Map<string, { score: number; goCount: number; total: number }> {
+  const out = new Map<string, { score: number; goCount: number; total: number }>();
+  for (const dateKey of dateKeys) {
+    let goCount = 0;
+    let total = 0;
+    for (const week of spotWeeks) {
+      const day = week.days.find((d) => d.dateKey === dateKey);
+      if (!day) continue;
+      total += 1;
+      if (day.verdict?.decision === "go") goCount += 1;
+    }
+    const score = total > 0 ? Math.round((goCount / total) * 100) : 0;
+    out.set(dateKey, { score, goCount, total });
+  }
+  return out;
+}
+
+function pickBestSpot(items: SpotWithVerdict[]): SpotWithVerdict | null {
+  if (items.length === 0) return null;
+  const score = (decision: "go" | "marginal" | "no_go" | undefined): number => {
+    if (decision === "go") return 3;
+    if (decision === "marginal") return 2;
+    if (decision === "no_go") return 1;
+    return 0;
+  };
+  let best = items[0]!;
+  let bestPeak = peakOf(best.hours);
+  for (const cur of items) {
+    const cScore = score(cur.verdict?.decision);
+    const bScore = score(best.verdict?.decision);
+    if (cScore > bScore) {
+      best = cur;
+      bestPeak = peakOf(cur.hours);
+      continue;
+    }
+    if (cScore === bScore) {
+      const cPeak = peakOf(cur.hours);
+      if (cPeak > bestPeak) {
+        best = cur;
+        bestPeak = cPeak;
+      }
+    }
+  }
+  return best;
+}
+
+function peakOf(hours: HourlyForecast[]): number {
+  let max = 0;
+  for (const h of hours) if (h.windSpeedMs > max) max = h.windSpeedMs;
+  return max;
 }
 
 function labelForScore(score: number): string {
@@ -353,6 +541,24 @@ function pad2(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
+function weekdayShort(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  return d
+    .toLocaleDateString("en-NL", { weekday: "short", timeZone: "Europe/Amsterdam" })
+    .toUpperCase();
+}
+
+function formatDateLabel(dateKey: string, isToday: boolean): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  const formatted = d.toLocaleDateString("en-NL", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "Europe/Amsterdam",
+  });
+  return isToday ? `Today · ${formatted}` : formatted;
+}
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
@@ -398,6 +604,43 @@ const styles = StyleSheet.create({
   scoreBarFill: { height: "100%" },
   scoreBarFillAccent: { backgroundColor: "#10b981" },
   scoreBarFillMuted: { backgroundColor: "#a1a1aa" },
+  weekStrip: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+    borderTopColor: "#f4f4f5",
+    borderTopWidth: 1,
+  },
+  weekChip: {
+    width: 56,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  weekChipSelected: { backgroundColor: "#18181b" },
+  weekChipDay: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    color: "#71717a",
+  },
+  weekChipDayToday: { color: "#059669" },
+  weekChipDaySelected: { color: "#a1a1aa" },
+  weekChipScore: {
+    marginTop: 4,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#18181b",
+    fontVariant: ["tabular-nums"],
+  },
+  weekChipScoreSelected: { color: "#fff" },
+  weekChipBar: {
+    marginTop: 4,
+    height: 3,
+    width: 24,
+    borderRadius: 999,
+  },
+  weekChipBarSelected: { backgroundColor: "rgba(255,255,255,0.4)" },
   tileGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -433,6 +676,7 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   tileAccent: { color: "#059669" },
+  tileMuted: { color: "#a1a1aa" },
   tileSub: { marginTop: 4, fontSize: 11, color: "#71717a" },
   tileSubSmall: { fontSize: 10, color: "#71717a", marginTop: 2 },
   windRow: { flexDirection: "row", alignItems: "center", gap: 8 },

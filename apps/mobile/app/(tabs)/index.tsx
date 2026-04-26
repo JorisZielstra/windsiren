@@ -14,7 +14,7 @@ import {
   dbRowToSpot,
   fetchFavoriteSpotIds,
   fetchPersonalFeed,
-  fetchTodayVerdict,
+  fetchSpotWeek,
   getCommentCounts,
   getFriendsOnWaterToday,
   getLikeCounts,
@@ -27,6 +27,7 @@ import {
   type FeedItem,
   type FriendsOnWaterToday,
   type PublicProfile,
+  type SpotWeek,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import { SessionCard } from "../../components/SessionCard";
@@ -47,6 +48,7 @@ type FeedData = {
 
 export default function SpotsListScreen() {
   const { user } = useAuth();
+  const [spotWeeks, setSpotWeeks] = useState<SpotWeek[] | null>(null);
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [friendsToday, setFriendsToday] = useState<FriendsOnWaterToday>({
@@ -74,15 +76,26 @@ export default function SpotsListScreen() {
         }
         const spots = (rows ?? []).map(dbRowToSpot);
         const todayKey = nlLocalDateKey(new Date());
-        const [results, favIds, friends] = await Promise.all([
-          Promise.all(spots.map(fetchTodayVerdict)),
+        const [weeks, favIds, friends] = await Promise.all([
+          Promise.all(spots.map((s) => fetchSpotWeek(s, 7))),
           user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
           user
             ? getFriendsOnWaterToday(supabase, user.id, todayKey)
             : Promise.resolve({ count: 0, profiles: [] } as FriendsOnWaterToday),
         ]);
         if (cancelled) return;
-        setItems(results);
+        // Today's verdicts derived from the partitioned week (used by the
+        // spot list under the dashboard).
+        const todayItems: SpotWithVerdict[] = weeks.map((week) => {
+          const today = week.days.find((d) => d.dateKey === todayKey) ?? week.days[0];
+          return {
+            spot: week.spot,
+            verdict: today?.verdict ?? null,
+            hours: today?.hours ?? [],
+          };
+        });
+        setSpotWeeks(weeks);
+        setItems(todayItems);
         setFavoriteIds(favIds);
         setFriendsToday(friends);
 
@@ -133,19 +146,14 @@ export default function SpotsListScreen() {
   );
 
   const favoriteItems = items?.filter((i) => favoriteIds.has(i.spot.id)) ?? [];
-  // Best across all NL — anchors temperature / peak window / trend on the
-  // dashboard. Favorites still display separately in the collapsible.
+  // Best across all NL today — anchors the "Other spots" collapsible exclusion.
   const bestSpot = pickHeroSpot(items ?? []);
   const restFavorites = favoriteItems.filter((f) => f.spot.id !== bestSpot?.spot.id);
   const restNonFavorites = (items ?? []).filter(
     (i) => i.spot.id !== bestSpot?.spot.id && !favoriteIds.has(i.spot.id),
   );
   const otherCount = restFavorites.length + restNonFavorites.length;
-  const todayLabel = new Date().toLocaleDateString("en-NL", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const todayKey = nlLocalDateKey(new Date());
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -160,9 +168,8 @@ export default function SpotsListScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.dashboardWrap}>
             <TodayDashboard
-              withVerdicts={items}
-              bestSpot={bestSpot}
-              todayLabel={todayLabel}
+              spotWeeks={spotWeeks ?? []}
+              todayKey={todayKey}
               friendsCount={friendsToday.count}
               friendsPreview={friendsToday.profiles}
               signedIn={!!user}
