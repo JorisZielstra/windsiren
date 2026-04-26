@@ -26,6 +26,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Today", tabBarIcon: () => null }} />
+      <Tabs.Screen name="spots" options={{ title: "Spots", tabBarIcon: () => null }} />
       <Tabs.Screen name="map" options={{ title: "Map", tabBarIcon: () => null }} />
       <Tabs.Screen name="feed" options={{ title: "Feed", tabBarIcon: () => null }} />
       <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: () => null }} />

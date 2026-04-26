@@ -34,6 +34,13 @@ export type DirectionRange = {
   to: number;                // 0–359. If to < from, the range wraps through 0°.
 };
 
+export type SpotRegion =
+  | "wadden"
+  | "north_holland"
+  | "south_holland"
+  | "zeeland"
+  | "ijsselmeer";
+
 export type Spot = {
   id: string;
   slug: string;
@@ -46,6 +53,7 @@ export type Spot = {
   hazards: string | null;
   knmiStationId: string | null;
   rwsTideStationId: string | null;
+  region: SpotRegion | null;
 };
 
 export type StationInfo = {

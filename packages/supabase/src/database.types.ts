@@ -74,6 +74,7 @@ export type Database = {
           hazards: string | null;
           knmi_station_id: string | null;
           rws_tide_station_id: string | null;
+          region: string | null;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -90,6 +91,7 @@ export type Database = {
           hazards?: string | null;
           knmi_station_id?: string | null;
           rws_tide_station_id?: string | null;
+          region?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -106,6 +108,7 @@ export type Database = {
           hazards?: string | null;
           knmi_station_id?: string | null;
           rws_tide_station_id?: string | null;
+          region?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;

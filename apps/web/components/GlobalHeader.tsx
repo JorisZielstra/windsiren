@@ -19,6 +19,7 @@ export async function GlobalHeader() {
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <NavLink href="/" label="Today" />
+          <NavLink href="/spots" label="Spots" />
           <NavLink href="/map" label="Map" />
           {user ? <NavLink href="/feed" label="Feed" /> : null}
           {user ? (

@@ -18,6 +18,7 @@ const BASE_SPOT: Spot = {
   hazards: null,
   knmiStationId: null,
   rwsTideStationId: null,
+  region: null,
 };
 
 const BASE_THRESHOLDS: ThresholdProfile = {

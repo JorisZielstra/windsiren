@@ -16,6 +16,7 @@ const SPOT: Spot = {
   hazards: null,
   knmiStationId: null,
   rwsTideStationId: null,
+  region: null,
 };
 
 // Build a daylight hour at NL local hour `localHour` on the given date

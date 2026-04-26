@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { msToKnots, type Verdict } from "@windsiren/shared";
+import { msToKnots } from "@windsiren/shared";
 import {
   dbRowToSpot,
   fetchFavoriteSpotIds,
@@ -33,6 +33,7 @@ import {
 } from "@windsiren/core";
 import { SessionCard } from "../../components/SessionCard";
 import { TodayDashboard } from "../../components/TodayDashboard";
+import { VerdictPill } from "../../components/VerdictPill";
 import { useAuth } from "../../lib/auth-context";
 import { relativeTime } from "../../lib/relative-time";
 import { supabase } from "../../lib/supabase";
@@ -347,28 +348,6 @@ function SpotRow({ item }: { item: SpotWithVerdict }) {
   );
 }
 
-function VerdictPill({ verdict }: { verdict: Verdict | null }) {
-  if (!verdict) {
-    return (
-      <View style={[styles.verdictPill, { backgroundColor: "#f4f4f5" }]}>
-        <Text style={[styles.verdictText, { color: "#71717a" }]}>No data</Text>
-      </View>
-    );
-  }
-  const palette = {
-    go: { bg: "#dcfce7", fg: "#065f46" },
-    marginal: { bg: "#fef3c7", fg: "#92400e" },
-    no_go: { bg: "#f4f4f5", fg: "#52525b" },
-  } as const;
-  const labels = { go: "GO", marginal: "MAYBE", no_go: "NO GO" } as const;
-  const p = palette[verdict.decision];
-  return (
-    <View style={[styles.verdictPill, { backgroundColor: p.bg }]}>
-      <Text style={[styles.verdictText, { color: p.fg }]}>{labels[verdict.decision]}</Text>
-    </View>
-  );
-}
-
 function nlLocalDateKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Amsterdam",
@@ -444,8 +423,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   tideBadgeText: { fontSize: 10, color: "#1e40af", fontWeight: "600" },
-  verdictPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
-  verdictText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   feedSection: { marginTop: 24, paddingHorizontal: 16 },
   feedHeader: {
     flexDirection: "row",

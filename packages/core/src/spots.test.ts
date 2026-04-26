@@ -22,6 +22,7 @@ const BASE_ROW: SpotRow = {
   hazards: "shallow at low tide",
   knmi_station_id: "06225",
   rws_tide_station_id: "IJMUIDEN",
+  region: "north_holland",
   active: true,
   created_at: "2026-04-23T12:00:00Z",
   updated_at: "2026-04-23T12:00:00Z",

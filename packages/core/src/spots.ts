@@ -14,6 +14,7 @@ import {
   type HourlyForecast,
   type Observation,
   type Spot,
+  type SpotRegion,
   type TidePoint,
   type Verdict,
 } from "@windsiren/shared";
@@ -47,6 +48,7 @@ export function dbRowToSpot(row: SpotRow): Spot {
     hazards: row.hazards,
     knmiStationId: row.knmi_station_id,
     rwsTideStationId: row.rws_tide_station_id,
+    region: (row.region as SpotRegion | null) ?? null,
   };
 }
 
