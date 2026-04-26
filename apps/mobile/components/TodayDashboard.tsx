@@ -1,24 +1,23 @@
 import { Link } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  averageDirectionDeg,
-  classifyWindTrend,
-  getSunTimes,
   type PublicProfile,
   type SpotWeek,
   type SpotWithVerdict,
-  type WindTrend,
 } from "@windsiren/core";
+import type { HourlyForecast } from "@windsiren/shared";
+import { countRideable } from "./dashboard-utils";
 import {
-  cardinalDirection,
-  DEFAULT_THRESHOLDS,
-  isHourRideable,
-  msToKnots,
-  type HourlyForecast,
-} from "@windsiren/shared";
-import { DirectionNeedle } from "./DirectionNeedle";
+  AirTempTile,
+  DaylightTile,
+  PeakWindowTile,
+  Tile,
+  TrendTile,
+  WindTile,
+} from "./DayTiles";
 import { TileModal, type TileKey } from "./TileModal";
+import { WeekStrip } from "./WeekStrip";
 
 type Props = {
   spotWeeks: SpotWeek[];
@@ -153,8 +152,8 @@ export function TodayDashboard({
       />
 
       <View style={styles.tileGrid}>
-        <WindTile bestSpot={bestSpot} onPress={() => setActiveTile("wind")} />
-        <AirTempTile bestSpot={bestSpot} onPress={() => setActiveTile("airTemp")} />
+        <WindTile item={bestSpot} onPress={() => setActiveTile("wind")} />
+        <AirTempTile item={bestSpot} onPress={() => setActiveTile("airTemp")} />
         {signedIn ? (
           <FriendsTile
             count={friendsCount}
@@ -167,11 +166,11 @@ export function TodayDashboard({
         )}
         <PeakWindowTile
           dayItems={dayItems}
-          bestSpot={bestSpot}
+          item={bestSpot}
           onPress={() => setActiveTile("peakWindow")}
         />
-        <DaylightTile bestSpot={bestSpot} selectedDate={selectedDate} />
-        <TrendTile bestSpot={bestSpot} onPress={() => setActiveTile("trend")} />
+        <DaylightTile item={bestSpot} selectedDate={selectedDate} />
+        <TrendTile item={bestSpot} onPress={() => setActiveTile("trend")} />
       </View>
 
       <TileModal
@@ -188,125 +187,8 @@ export function TodayDashboard({
 }
 
 // ---------------------------------------------------------------------------
-// Week strip
+// Tiles unique to the dashboard. Per-spot tiles live in DayTiles.tsx.
 // ---------------------------------------------------------------------------
-
-function WeekStrip({
-  dateKeys,
-  weekScores,
-  selectedDate,
-  todayKey,
-  onSelect,
-}: {
-  dateKeys: string[];
-  weekScores: Map<string, { score: number; goCount: number; total: number }>;
-  selectedDate: string;
-  todayKey: string;
-  onSelect: (dateKey: string) => void;
-}) {
-  if (dateKeys.length === 0) return null;
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.weekStrip}
-    >
-      {dateKeys.map((dateKey) => {
-        const stats = weekScores.get(dateKey);
-        const score = stats?.score ?? 0;
-        const isSelected = dateKey === selectedDate;
-        const isToday = dateKey === todayKey;
-        const accentBg = scoreAccentColor(score);
-        return (
-          <Pressable
-            key={dateKey}
-            onPress={() => onSelect(dateKey)}
-            style={[styles.weekChip, isSelected && styles.weekChipSelected]}
-          >
-            <Text
-              style={[
-                styles.weekChipDay,
-                isSelected
-                  ? styles.weekChipDaySelected
-                  : isToday
-                    ? styles.weekChipDayToday
-                    : null,
-              ]}
-            >
-              {isToday ? "TODAY" : weekdayShort(dateKey)}
-            </Text>
-            <Text
-              style={[styles.weekChipScore, isSelected && styles.weekChipScoreSelected]}
-            >
-              {score}
-            </Text>
-            <View
-              style={[
-                styles.weekChipBar,
-                isSelected ? styles.weekChipBarSelected : { backgroundColor: accentBg },
-              ]}
-            />
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
-function scoreAccentColor(score: number): string {
-  if (score >= 70) return "#10b981";
-  if (score >= 40) return "#6ee7b7";
-  if (score >= 20) return "#fcd34d";
-  return "#d4d4d8";
-}
-
-// ---------------------------------------------------------------------------
-// Tiles
-// ---------------------------------------------------------------------------
-
-function WindTile({
-  bestSpot,
-  onPress,
-}: {
-  bestSpot: SpotWithVerdict | null;
-  onPress?: () => void;
-}) {
-  if (!bestSpot) return <Tile label="WIND">—</Tile>;
-  const dirs = daylightHours(bestSpot.hours).map((h) => h.windDirectionDeg);
-  if (dirs.length === 0) return <Tile label="WIND">—</Tile>;
-  const avgDeg = averageDirectionDeg(dirs);
-  return (
-    <Tile label="WIND AVG" onPress={onPress}>
-      <View style={styles.windRow}>
-        <DirectionNeedle directionDeg={avgDeg} size={32} />
-        <View>
-          <Text style={styles.tileValue}>{cardinalDirection(avgDeg)}</Text>
-          <Text style={styles.tileSubSmall}>{Math.round(avgDeg)}°</Text>
-        </View>
-      </View>
-    </Tile>
-  );
-}
-
-function AirTempTile({
-  bestSpot,
-  onPress,
-}: {
-  bestSpot: SpotWithVerdict | null;
-  onPress?: () => void;
-}) {
-  if (!bestSpot) return <Tile label="AIR TEMP">—</Tile>;
-  const temps = daylightHours(bestSpot.hours)
-    .map((h) => h.airTempC)
-    .filter((t): t is number => t != null);
-  if (temps.length === 0) return <Tile label="AIR TEMP">—</Tile>;
-  const avg = temps.reduce((s, x) => s + x, 0) / temps.length;
-  return (
-    <Tile label="AIR TEMP" sub={`at ${bestSpot.spot.name}`} onPress={onPress}>
-      <Text style={styles.tileValue}>{Math.round(avg)}°C</Text>
-    </Tile>
-  );
-}
 
 function FriendsTile({
   count,
@@ -353,140 +235,9 @@ function SignInTile() {
   );
 }
 
-function PeakWindowTile({
-  dayItems,
-  bestSpot,
-  onPress,
-}: {
-  dayItems: SpotWithVerdict[];
-  bestSpot: SpotWithVerdict | null;
-  onPress?: () => void;
-}) {
-  if (!bestSpot) return <Tile label="PEAK WINDOW">—</Tile>;
-  const window = longestRideableRun(bestSpot);
-  let peakGustMs = 0;
-  let peakGustSpotName: string | null = null;
-  for (const v of dayItems) {
-    for (const h of v.hours) {
-      if (h.gustMs > peakGustMs) {
-        peakGustMs = h.gustMs;
-        peakGustSpotName = v.spot.name;
-      }
-    }
-  }
-  const sub = peakGustSpotName
-    ? `gust ${Math.round(msToKnots(peakGustMs))} kn at ${peakGustSpotName}`
-    : undefined;
-  if (!window) {
-    return (
-      <Tile label="PEAK WINDOW" sub={sub} onPress={onPress}>
-        —
-      </Tile>
-    );
-  }
-  return (
-    <Tile label="PEAK WINDOW" sub={sub} onPress={onPress}>
-      <Text style={styles.tileValue}>
-        {pad2(window.startHour)}–{pad2(window.endHour)}h
-      </Text>
-    </Tile>
-  );
-}
-
-function DaylightTile({
-  bestSpot,
-  selectedDate,
-}: {
-  bestSpot: SpotWithVerdict | null;
-  selectedDate: string;
-}) {
-  if (!bestSpot) return <Tile label="DAYLIGHT">—</Tile>;
-  const { sunrise, sunset } = getSunTimes(
-    bestSpot.spot.lat,
-    bestSpot.spot.lng,
-    new Date(`${selectedDate}T12:00:00Z`),
-  );
-  const lengthMs = sunset.getTime() - sunrise.getTime();
-  const hours = Math.floor(lengthMs / 3600000);
-  const minutes = Math.floor((lengthMs % 3600000) / 60000);
-  return (
-    <Tile label="DAYLIGHT" sub={`${hours}h ${minutes}m`}>
-      <Text style={styles.tileValueSmall}>
-        {fmtNlClock(sunrise)} → {fmtNlClock(sunset)}
-      </Text>
-    </Tile>
-  );
-}
-
-function TrendTile({
-  bestSpot,
-  onPress,
-}: {
-  bestSpot: SpotWithVerdict | null;
-  onPress?: () => void;
-}) {
-  if (!bestSpot) return <Tile label="TREND">—</Tile>;
-  const trend = classifyWindTrend(bestSpot.hours);
-  const arrow = trend === "rising" ? "↑" : trend === "dropping" ? "↓" : "→";
-  const accentStyle =
-    trend === "rising"
-      ? styles.trendRising
-      : trend === "dropping"
-        ? styles.trendDropping
-        : styles.trendHolding;
-  return (
-    <Tile label="TREND" sub={`at ${bestSpot.spot.name}`} onPress={onPress}>
-      <Text style={[styles.tileValue, accentStyle]}>
-        {arrow} {labelForTrend(trend)}
-      </Text>
-    </Tile>
-  );
-}
-
 // ---------------------------------------------------------------------------
-// Building blocks + helpers
+// Helpers used only by TodayDashboard (per-spot helpers live in dashboard-utils).
 // ---------------------------------------------------------------------------
-
-function Tile({
-  label,
-  sub,
-  children,
-  onPress,
-}: {
-  label: string;
-  sub?: string;
-  children: React.ReactNode;
-  onPress?: () => void;
-}) {
-  const inner = (
-    <>
-      <Text style={styles.tileLabel}>{label}</Text>
-      <View style={styles.tileBody}>
-        {typeof children === "string" ? (
-          <Text style={styles.tileValue}>{children}</Text>
-        ) : (
-          children
-        )}
-      </View>
-      {sub ? (
-        <Text style={styles.tileSub} numberOfLines={1}>
-          {sub}
-        </Text>
-      ) : null}
-    </>
-  );
-  if (onPress) {
-    return (
-      <Pressable
-        style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
-        onPress={onPress}
-      >
-        {inner}
-      </Pressable>
-    );
-  }
-  return <View style={styles.tile}>{inner}</View>;
-}
 
 function collectDateKeys(spotWeeks: SpotWeek[]): string[] {
   const keys = new Set<string>();
@@ -556,83 +307,6 @@ function labelForScore(score: number): string {
   return "Mellow day";
 }
 
-function labelForTrend(t: WindTrend): string {
-  if (t === "rising") return "rising";
-  if (t === "dropping") return "dropping";
-  return "holding";
-}
-
-function countRideable(item: SpotWithVerdict): number {
-  return item.hours.filter((h) =>
-    isHourRideable(h, item.spot, DEFAULT_THRESHOLDS),
-  ).length;
-}
-
-function longestRideableRun(
-  item: SpotWithVerdict,
-): { startHour: number; endHour: number } | null {
-  const daylight = daylightHours(item.hours);
-  let bestStart: number | null = null;
-  let bestLen = 0;
-  let curStart: number | null = null;
-  let curLen = 0;
-  for (const h of daylight) {
-    if (isHourRideable(h, item.spot, DEFAULT_THRESHOLDS)) {
-      if (curStart === null) curStart = nlLocalHour(new Date(h.time));
-      curLen += 1;
-    } else {
-      if (curLen > bestLen && curStart !== null) {
-        bestStart = curStart;
-        bestLen = curLen;
-      }
-      curStart = null;
-      curLen = 0;
-    }
-  }
-  if (curLen > bestLen && curStart !== null) {
-    bestStart = curStart;
-    bestLen = curLen;
-  }
-  if (bestStart === null || bestLen === 0) return null;
-  return { startHour: bestStart, endHour: bestStart + bestLen };
-}
-
-function daylightHours(hours: HourlyForecast[]): HourlyForecast[] {
-  return hours.filter((h) => {
-    const localHour = nlLocalHour(new Date(h.time));
-    return localHour >= 8 && localHour <= 20;
-  });
-}
-
-function nlLocalHour(d: Date): number {
-  const hh = new Intl.DateTimeFormat("en-NL", {
-    timeZone: "Europe/Amsterdam",
-    hour: "2-digit",
-    hour12: false,
-  }).format(d);
-  return parseInt(hh, 10);
-}
-
-function fmtNlClock(d: Date): string {
-  return new Intl.DateTimeFormat("en-NL", {
-    timeZone: "Europe/Amsterdam",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
-}
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, "0");
-}
-
-function weekdayShort(dateKey: string): string {
-  const d = new Date(`${dateKey}T12:00:00Z`);
-  return d
-    .toLocaleDateString("en-NL", { weekday: "short", timeZone: "Europe/Amsterdam" })
-    .toUpperCase();
-}
-
 function formatDateLabel(dateKey: string, isToday: boolean): string {
   const d = new Date(`${dateKey}T12:00:00Z`);
   const formatted = d.toLocaleDateString("en-NL", {
@@ -689,59 +363,12 @@ const styles = StyleSheet.create({
   scoreBarFill: { height: "100%" },
   scoreBarFillAccent: { backgroundColor: "#10b981" },
   scoreBarFillMuted: { backgroundColor: "#a1a1aa" },
-  weekStrip: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-    borderTopColor: "#f4f4f5",
-    borderTopWidth: 1,
-  },
-  weekChip: {
-    width: 56,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  weekChipSelected: { backgroundColor: "#18181b" },
-  weekChipDay: {
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    color: "#71717a",
-  },
-  weekChipDayToday: { color: "#059669" },
-  weekChipDaySelected: { color: "#a1a1aa" },
-  weekChipScore: {
-    marginTop: 4,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#18181b",
-    fontVariant: ["tabular-nums"],
-  },
-  weekChipScoreSelected: { color: "#fff" },
-  weekChipBar: {
-    marginTop: 4,
-    height: 3,
-    width: 24,
-    borderRadius: 999,
-  },
-  weekChipBarSelected: { backgroundColor: "rgba(255,255,255,0.4)" },
   tileGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     borderTopColor: "#f4f4f5",
     borderTopWidth: 1,
   },
-  tile: {
-    width: "50%",
-    padding: 12,
-    borderRightColor: "#f4f4f5",
-    borderRightWidth: 1,
-    borderBottomColor: "#f4f4f5",
-    borderBottomWidth: 1,
-    minHeight: 84,
-  },
-  tilePressed: { backgroundColor: "#fafafa" },
   viewBreakdown: { fontSize: 12, color: "#71717a" },
   scoreFooterRow: {
     marginTop: 12,
@@ -751,32 +378,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   scopeHint: { fontSize: 11, color: "#71717a", flexShrink: 1, textAlign: "right" },
-  tileLabel: {
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    color: "#71717a",
-  },
-  tileBody: { marginTop: 6 },
+  // Styles below are still used by the inline FriendsTile / SignInTile —
+  // those reuse the per-spot Tile shell from DayTiles.tsx but render
+  // dashboard-specific content.
   tileValue: {
     fontSize: 20,
     fontWeight: "700",
     color: "#18181b",
     fontVariant: ["tabular-nums"],
   },
-  tileValueSmall: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#18181b",
-    fontVariant: ["tabular-nums"],
-  },
   tileAccent: { color: "#059669" },
   tileMuted: { color: "#a1a1aa" },
-  tileSub: { marginTop: 4, fontSize: 11, color: "#71717a" },
   tileSubSmall: { fontSize: 10, color: "#71717a", marginTop: 2 },
-  windRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   signInLink: { fontSize: 14, color: "#059669", fontWeight: "600" },
-  trendRising: { color: "#059669" },
-  trendDropping: { color: "#d97706" },
-  trendHolding: { color: "#3f3f46" },
 });
