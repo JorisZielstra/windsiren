@@ -10,6 +10,7 @@ export * from "./likes";
 export * from "./photos";
 export * from "./comments";
 export * from "./home-spot";
+export * from "./home-spots";
 export * from "./user-stats";
 export * from "./friends-today";
 export * from "./sun-times";
