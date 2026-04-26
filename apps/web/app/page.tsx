@@ -7,6 +7,7 @@ import {
   fetchPersonalFeed,
   fetchTodayVerdict,
   getCommentCounts,
+  getFriendsOnWaterToday,
   getLikeCounts,
   getLikedSessionIds,
   getPhotosForSessions,
@@ -17,8 +18,8 @@ import {
   type SpotWithVerdict,
 } from "@windsiren/core";
 import { msToKnots } from "@windsiren/shared";
-import { HeroSpotCard } from "@/components/HeroSpotCard";
 import { SessionCard } from "@/components/SessionCard";
+import { TodayDashboard } from "@/components/TodayDashboard";
 import { relativeTime } from "@/lib/relative-time";
 
 export const dynamic = "force-dynamic";
@@ -50,17 +51,31 @@ export default async function Home() {
   const spots = (rows ?? []).map(dbRowToSpot);
   const withVerdicts = await Promise.all(spots.map(fetchTodayVerdict));
 
-  const favoriteIds = user ? await fetchFavoriteSpotIds(authed, user.id) : new Set<string>();
+  const todayKey = nlLocalDateKey(new Date());
+
+  const [favoriteIds, friendsToday] = await Promise.all([
+    user ? fetchFavoriteSpotIds(authed, user.id) : Promise.resolve(new Set<string>()),
+    user
+      ? getFriendsOnWaterToday(authed, user.id, todayKey)
+      : Promise.resolve({ count: 0, profiles: [] }),
+  ]);
   const favorites = withVerdicts.filter((item) => favoriteIds.has(item.spot.id));
 
-  const heroPool = favorites.length > 0 ? favorites : withVerdicts;
-  const hero = pickHeroSpot(heroPool);
+  // The dashboard's "Best:" anchor is the top spot across all NL — the
+  // collapsible below still pins favorites separately.
+  const bestSpot = pickHeroSpot(withVerdicts);
 
   // Other spots: favorites pinned to the top, then non-favorites — alphabetical within each group.
-  const restFavorites = favorites.filter((f) => f.spot.id !== hero?.spot.id);
+  const restFavorites = favorites.filter((f) => f.spot.id !== bestSpot?.spot.id);
   const restNonFavorites = withVerdicts.filter(
-    (item) => item.spot.id !== hero?.spot.id && !favoriteIds.has(item.spot.id),
+    (item) => item.spot.id !== bestSpot?.spot.id && !favoriteIds.has(item.spot.id),
   );
+
+  const todayLabel = new Date().toLocaleDateString("en-NL", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 
   // Personal feed (signed-in only) — top 5 items, with a link to the full feed.
   const feedItems = user
@@ -103,11 +118,16 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      {hero ? (
-        <section className="mb-8">
-          <HeroSpotCard item={hero} />
-        </section>
-      ) : null}
+      <section className="mb-8">
+        <TodayDashboard
+          withVerdicts={withVerdicts}
+          bestSpot={bestSpot}
+          todayLabel={todayLabel}
+          friendsCount={friendsToday.count}
+          friendsPreview={friendsToday.profiles}
+          signedIn={!!user}
+        />
+      </section>
 
       <details className="mb-10 rounded-lg border border-zinc-200 dark:border-zinc-800">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
@@ -275,4 +295,13 @@ function VerdictBadge({ verdict }: { verdict: SpotWithVerdict["verdict"] }) {
       {labels[verdict.decision]}
     </span>
   );
+}
+
+function nlLocalDateKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }

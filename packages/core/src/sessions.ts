@@ -131,7 +131,7 @@ function avg(xs: number[]): number {
 }
 
 // Vector-mean wind direction: avoids the 350°+10° → 180° trap.
-function averageDirectionDeg(angles: number[]): number {
+export function averageDirectionDeg(angles: number[]): number {
   let sumSin = 0;
   let sumCos = 0;
   for (const a of angles) {

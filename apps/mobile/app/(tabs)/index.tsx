@@ -16,6 +16,7 @@ import {
   fetchPersonalFeed,
   fetchTodayVerdict,
   getCommentCounts,
+  getFriendsOnWaterToday,
   getLikeCounts,
   getLikedSessionIds,
   getPhotosForSessions,
@@ -24,11 +25,12 @@ import {
   peakWindMs,
   pickHeroSpot,
   type FeedItem,
+  type FriendsOnWaterToday,
   type PublicProfile,
   type SpotWithVerdict,
 } from "@windsiren/core";
-import { HeroSpotCard } from "../../components/HeroSpotCard";
 import { SessionCard } from "../../components/SessionCard";
+import { TodayDashboard } from "../../components/TodayDashboard";
 import { useAuth } from "../../lib/auth-context";
 import { relativeTime } from "../../lib/relative-time";
 import { supabase } from "../../lib/supabase";
@@ -47,6 +49,10 @@ export default function SpotsListScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [friendsToday, setFriendsToday] = useState<FriendsOnWaterToday>({
+    count: 0,
+    profiles: [],
+  });
   const [feed, setFeed] = useState<FeedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [otherOpen, setOtherOpen] = useState(false);
@@ -67,13 +73,18 @@ export default function SpotsListScreen() {
           return;
         }
         const spots = (rows ?? []).map(dbRowToSpot);
-        const [results, favIds] = await Promise.all([
+        const todayKey = nlLocalDateKey(new Date());
+        const [results, favIds, friends] = await Promise.all([
           Promise.all(spots.map(fetchTodayVerdict)),
           user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
+          user
+            ? getFriendsOnWaterToday(supabase, user.id, todayKey)
+            : Promise.resolve({ count: 0, profiles: [] } as FriendsOnWaterToday),
         ]);
         if (cancelled) return;
         setItems(results);
         setFavoriteIds(favIds);
+        setFriendsToday(friends);
 
         if (user) {
           const feedItems = await fetchPersonalFeed(supabase, user.id, {
@@ -122,13 +133,19 @@ export default function SpotsListScreen() {
   );
 
   const favoriteItems = items?.filter((i) => favoriteIds.has(i.spot.id)) ?? [];
-  const heroPool = favoriteItems.length > 0 ? favoriteItems : (items ?? []);
-  const hero = pickHeroSpot(heroPool);
-  const restFavorites = favoriteItems.filter((f) => f.spot.id !== hero?.spot.id);
+  // Best across all NL — anchors temperature / peak window / trend on the
+  // dashboard. Favorites still display separately in the collapsible.
+  const bestSpot = pickHeroSpot(items ?? []);
+  const restFavorites = favoriteItems.filter((f) => f.spot.id !== bestSpot?.spot.id);
   const restNonFavorites = (items ?? []).filter(
-    (i) => i.spot.id !== hero?.spot.id && !favoriteIds.has(i.spot.id),
+    (i) => i.spot.id !== bestSpot?.spot.id && !favoriteIds.has(i.spot.id),
   );
   const otherCount = restFavorites.length + restNonFavorites.length;
+  const todayLabel = new Date().toLocaleDateString("en-NL", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -141,7 +158,16 @@ export default function SpotsListScreen() {
         <ActivityIndicator style={styles.loader} size="large" />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
-          {hero ? <HeroSpotCard item={hero} /> : null}
+          <View style={styles.dashboardWrap}>
+            <TodayDashboard
+              withVerdicts={items}
+              bestSpot={bestSpot}
+              todayLabel={todayLabel}
+              friendsCount={friendsToday.count}
+              friendsPreview={friendsToday.profiles}
+              signedIn={!!user}
+            />
+          </View>
 
           {otherCount > 0 ? (
             <View style={styles.otherSection}>
@@ -307,9 +333,19 @@ function VerdictPill({ verdict }: { verdict: Verdict | null }) {
   );
 }
 
+function nlLocalDateKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   scroll: { paddingBottom: 24 },
+  dashboardWrap: { paddingHorizontal: 16, paddingTop: 16 },
   loader: { marginTop: 48 },
   errorBox: {
     margin: 16,
