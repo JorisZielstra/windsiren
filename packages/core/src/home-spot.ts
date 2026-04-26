@@ -4,17 +4,35 @@ import { dbRowToSpot } from "./spots";
 
 // Picks the spot to show in the persistent weather strip.
 // Resolution order:
-//   1. The viewer's first favorite spot (if signed in + has favorites)
-//   2. The most-favorited spot across all users (community popularity)
-//   3. Fallback: first active spot, alphabetically (deterministic, never errors)
+//   1. The viewer's first home spot (if signed in + has any) — proper
+//      "this is where I kite" signal, beats every other heuristic.
+//   2. The viewer's first favorite spot (legacy behavior, kept as a
+//      gentler fallback for users who star spots but haven't promoted
+//      any to home).
+//   3. The most-favorited spot across all users (community popularity).
+//   4. Fallback: first active spot alphabetically (deterministic).
 //
 // Returns null only if the spots table is empty.
 export async function pickHomeSpot(
   supabase: TypedSupabaseClient,
   viewerId: string | null,
 ): Promise<Spot | null> {
-  // 1. Viewer's first favorite
   if (viewerId) {
+    // 1. Viewer's first home spot (in user-stored position order)
+    const { data: homes } = await supabase
+      .from("home_spots")
+      .select("spot_id")
+      .eq("user_id", viewerId)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const homeSpotId = homes?.[0]?.spot_id;
+    if (homeSpotId) {
+      const spot = await fetchSpotById(supabase, homeSpotId);
+      if (spot) return spot;
+    }
+
+    // 2. Viewer's first favorite (legacy fallback)
     const { data: favs } = await supabase
       .from("favorite_spots")
       .select("spot_id")
@@ -28,14 +46,14 @@ export async function pickHomeSpot(
     }
   }
 
-  // 2. Most-favorited spot across the community
+  // 3. Most-favorited spot across the community
   const popularId = await getMostFavoritedSpotId(supabase);
   if (popularId) {
     const spot = await fetchSpotById(supabase, popularId);
     if (spot) return spot;
   }
 
-  // 3. First active spot alphabetically
+  // 4. First active spot alphabetically
   const { data: rows } = await supabase
     .from("spots")
     .select("*")
