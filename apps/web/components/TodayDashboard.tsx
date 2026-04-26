@@ -28,6 +28,10 @@ type Props = {
   friendsCount: number;
   friendsPreview: PublicProfile[];
   signedIn: boolean;
+  // When set + non-empty, the score / kiteable count / week strip /
+  // best-spot anchor all scope to these spots only. Empty set + signedIn
+  // shows a "Set home spots →" prompt; signed-out viewers ignore it.
+  homeSpotIds: Set<string>;
 };
 
 export function TodayDashboard({
@@ -36,9 +40,22 @@ export function TodayDashboard({
   friendsCount,
   friendsPreview,
   signedIn,
+  homeSpotIds,
 }: Props) {
+  // Personalized scoping: when the user has home spots set, every per-day
+  // aggregate (score, kiteable count, best-spot anchor, week strip)
+  // restricts to that subset. Empty home spots → fall back to all NL.
+  const personalized = signedIn && homeSpotIds.size > 0;
+  const scopedSpotWeeks = useMemo(
+    () =>
+      personalized
+        ? spotWeeks.filter((w) => homeSpotIds.has(w.spot.id))
+        : spotWeeks,
+    [spotWeeks, homeSpotIds, personalized],
+  );
+
   // The list of dateKeys covered by every spot's week. Sorted ascending.
-  const dateKeys = useMemo(() => collectDateKeys(spotWeeks), [spotWeeks]);
+  const dateKeys = useMemo(() => collectDateKeys(scopedSpotWeeks), [scopedSpotWeeks]);
   const [selectedDate, setSelectedDate] = useState<string>(
     dateKeys.includes(todayKey) ? todayKey : (dateKeys[0] ?? todayKey),
   );
@@ -49,7 +66,7 @@ export function TodayDashboard({
   // failed fetch, so all the tile aggregations handle it identically.
   const dayItems: SpotWithVerdict[] = useMemo(
     () =>
-      spotWeeks.map((week) => {
+      scopedSpotWeeks.map((week) => {
         const day = week.days.find((d) => d.dateKey === selectedDate);
         return {
           spot: week.spot,
@@ -57,7 +74,7 @@ export function TodayDashboard({
           hours: day?.hours ?? [],
         };
       }),
-    [spotWeeks, selectedDate],
+    [scopedSpotWeeks, selectedDate],
   );
 
   const total = dayItems.length;
@@ -71,7 +88,10 @@ export function TodayDashboard({
   const dateLabel = formatDateLabel(selectedDate, isToday);
 
   // Per-day score map for the WeekStrip (same formula as the headline).
-  const weekScores = useMemo(() => buildWeekScores(spotWeeks, dateKeys), [spotWeeks, dateKeys]);
+  const weekScores = useMemo(
+    () => buildWeekScores(scopedSpotWeeks, dateKeys),
+    [scopedSpotWeeks, dateKeys],
+  );
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -107,7 +127,7 @@ export function TodayDashboard({
                 <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">
                   {goCount}
                 </span>{" "}
-                of {total} spots GO
+                of {total} {personalized ? "home spots" : "spots"} GO
               </div>
               {bestSpot ? (
                 <Link
@@ -134,13 +154,28 @@ export function TodayDashboard({
                 style={{ width: `${dayScore}%` }}
               />
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTile("score")}
-              className="mt-3 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-            >
-              View breakdown →
-            </button>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveTile("score")}
+                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                View breakdown →
+              </button>
+              {signedIn && homeSpotIds.size === 0 ? (
+                <p className="text-xs text-zinc-500">
+                  This score covers all NL.{" "}
+                  <span className="text-zinc-700 dark:text-zinc-300">
+                    Open a spot to set it as a home spot →
+                  </span>
+                </p>
+              ) : personalized ? (
+                <p className="text-xs text-zinc-500">
+                  Personalized · {homeSpotIds.size} home spot
+                  {homeSpotIds.size === 1 ? "" : "s"}
+                </p>
+              ) : null}
+            </div>
           </>
         ) : null}
       </div>

@@ -24,6 +24,7 @@ import {
   type LiveObservation,
 } from "@windsiren/core";
 import { FavoriteButton } from "./FavoriteButton";
+import { HomeSpotButton } from "./HomeSpotButton";
 import { SpotSocial } from "./SpotSocial";
 import { WindRose } from "./WindRose";
 
@@ -91,7 +92,10 @@ export default async function SpotDetailPage({
               ) : null}
             </div>
           </div>
-          <FavoriteButton spotId={spot.id} />
+          <div className="flex flex-col items-end gap-2">
+            <HomeSpotButton spotId={spot.id} />
+            <FavoriteButton spotId={spot.id} />
+          </div>
         </div>
         <p className="mt-1 text-sm text-zinc-500">
           {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands

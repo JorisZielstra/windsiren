@@ -13,6 +13,7 @@ import { msToKnots, type Verdict } from "@windsiren/shared";
 import {
   dbRowToSpot,
   fetchFavoriteSpotIds,
+  fetchHomeSpotIds,
   fetchPersonalFeed,
   fetchSpotWeek,
   getCommentCounts,
@@ -51,6 +52,7 @@ export default function SpotsListScreen() {
   const [spotWeeks, setSpotWeeks] = useState<SpotWeek[] | null>(null);
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [homeSpotIds, setHomeSpotIds] = useState<Set<string>>(new Set());
   const [friendsToday, setFriendsToday] = useState<FriendsOnWaterToday>({
     count: 0,
     profiles: [],
@@ -76,9 +78,10 @@ export default function SpotsListScreen() {
         }
         const spots = (rows ?? []).map(dbRowToSpot);
         const todayKey = nlLocalDateKey(new Date());
-        const [weeks, favIds, friends] = await Promise.all([
+        const [weeks, favIds, homeIds, friends] = await Promise.all([
           Promise.all(spots.map((s) => fetchSpotWeek(s, 7))),
           user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
+          user ? fetchHomeSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
           user
             ? getFriendsOnWaterToday(supabase, user.id, todayKey)
             : Promise.resolve({ count: 0, profiles: [] } as FriendsOnWaterToday),
@@ -97,6 +100,7 @@ export default function SpotsListScreen() {
         setSpotWeeks(weeks);
         setItems(todayItems);
         setFavoriteIds(favIds);
+        setHomeSpotIds(homeIds);
         setFriendsToday(friends);
 
         if (user) {
@@ -173,6 +177,7 @@ export default function SpotsListScreen() {
               friendsCount={friendsToday.count}
               friendsPreview={friendsToday.profiles}
               signedIn={!!user}
+              homeSpotIds={homeSpotIds}
             />
           </View>
 

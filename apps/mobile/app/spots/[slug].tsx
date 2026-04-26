@@ -16,6 +16,7 @@ import {
 } from "@windsiren/shared";
 import {
   addFavorite,
+  addHomeSpot,
   cardinalLabelPositions,
   dbRowToSpot,
   fetch3DayForecast,
@@ -24,9 +25,13 @@ import {
   formatDayLabel,
   formatHourLabel,
   groupHoursByLocalDay,
+  fetchHomeSpotIds,
+  isHomeSpot,
   isSpotFavorited,
   needleEndpoint,
   removeFavorite,
+  removeHomeSpot,
+  SUGGESTED_HOME_SPOT_MAX,
   safeSectorPaths,
   type DayGroup,
   type LiveObservation,
@@ -208,7 +213,10 @@ function SpotHeader({
             {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
           </Text>
         </View>
-        <FavoriteButton spotId={spot.id} />
+        <View style={styles.spotButtonsCol}>
+          <HomeSpotButton spotId={spot.id} />
+          <FavoriteButton spotId={spot.id} />
+        </View>
       </View>
 
       <View style={styles.windRoseRow}>
@@ -293,6 +301,80 @@ function FavoriteButton({ spotId }: { spotId: string }) {
       >
         <Text style={favorited ? styles.favBtnActiveText : styles.favBtnText}>
           {favorited === null ? "…" : favorited ? "★ Favorited" : "☆ Favorite"}
+        </Text>
+      </Pressable>
+      {message ? <Text style={styles.favMessage}>{message}</Text> : null}
+    </View>
+  );
+}
+
+function HomeSpotButton({ spotId }: { spotId: string }) {
+  const { user } = useAuth();
+  const [home, setHome] = useState<boolean | null>(null);
+  const [count, setCount] = useState<number>(0);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setHome(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      isHomeSpot(supabase, user.id, spotId),
+      fetchHomeSpotIds(supabase, user.id),
+    ]).then(([h, ids]) => {
+      if (cancelled) return;
+      setHome(h);
+      setCount(ids.size);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, spotId]);
+
+  if (!user) {
+    return (
+      <Link href="/sign-in" asChild>
+        <Pressable style={styles.homeBtn}>
+          <Text style={styles.homeBtnText}>🏠 Sign in</Text>
+        </Pressable>
+      </Link>
+    );
+  }
+
+  async function toggle() {
+    if (!user || busy || home === null) return;
+    setBusy(true);
+    setMessage(null);
+    const result = home
+      ? await removeHomeSpot(supabase, user.id, spotId)
+      : await addHomeSpot(supabase, user.id, spotId);
+    setBusy(false);
+    if (result.ok) {
+      setHome(result.isHome);
+      const nextCount = count + (result.isHome ? 1 : -1);
+      setCount(nextCount);
+      if (result.isHome && nextCount > SUGGESTED_HOME_SPOT_MAX) {
+        setMessage(
+          `${nextCount} home spots — we suggest 1–${SUGGESTED_HOME_SPOT_MAX}.`,
+        );
+      }
+    } else {
+      setMessage(`Couldn't update: ${result.message}`);
+    }
+  }
+
+  return (
+    <View style={{ alignItems: "flex-end" }}>
+      <Pressable
+        onPress={toggle}
+        disabled={busy || home === null}
+        style={[styles.homeBtn, home ? styles.homeBtnActive : null, busy && { opacity: 0.5 }]}
+      >
+        <Text style={home ? styles.homeBtnActiveText : styles.homeBtnText}>
+          {home === null ? "…" : home ? "🏠 Home spot" : "🏠 Set as home"}
         </Text>
       </Pressable>
       {message ? <Text style={styles.favMessage}>{message}</Text> : null}
@@ -489,7 +571,19 @@ const styles = StyleSheet.create({
   favBtnActive: { borderColor: "#fbbf24", backgroundColor: "#fef3c7" },
   favBtnText: { fontSize: 13, fontWeight: "600", color: "#18181b" },
   favBtnActiveText: { fontSize: 13, fontWeight: "600", color: "#78350f" },
-  favMessage: { marginTop: 6, fontSize: 10, color: "#6b7280", maxWidth: 140, textAlign: "right" },
+  favMessage: { marginTop: 6, fontSize: 10, color: "#6b7280", maxWidth: 160, textAlign: "right" },
+  spotButtonsCol: { gap: 8, alignItems: "flex-end" },
+  homeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#d4d4d8",
+    backgroundColor: "#fff",
+  },
+  homeBtnActive: { borderColor: "#10b981", backgroundColor: "#ecfdf5" },
+  homeBtnText: { fontSize: 13, fontWeight: "600", color: "#18181b" },
+  homeBtnActiveText: { fontSize: 13, fontWeight: "600", color: "#065f46" },
   livePanel: {
     padding: 14,
     marginBottom: 24,

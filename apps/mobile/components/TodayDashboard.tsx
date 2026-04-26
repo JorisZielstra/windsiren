@@ -26,6 +26,7 @@ type Props = {
   friendsCount: number;
   friendsPreview: PublicProfile[];
   signedIn: boolean;
+  homeSpotIds: Set<string>;
 };
 
 export function TodayDashboard({
@@ -34,8 +35,18 @@ export function TodayDashboard({
   friendsCount,
   friendsPreview,
   signedIn,
+  homeSpotIds,
 }: Props) {
-  const dateKeys = useMemo(() => collectDateKeys(spotWeeks), [spotWeeks]);
+  const personalized = signedIn && homeSpotIds.size > 0;
+  const scopedSpotWeeks = useMemo(
+    () =>
+      personalized
+        ? spotWeeks.filter((w) => homeSpotIds.has(w.spot.id))
+        : spotWeeks,
+    [spotWeeks, homeSpotIds, personalized],
+  );
+
+  const dateKeys = useMemo(() => collectDateKeys(scopedSpotWeeks), [scopedSpotWeeks]);
   const [selectedDate, setSelectedDate] = useState<string>(
     dateKeys.includes(todayKey) ? todayKey : (dateKeys[0] ?? todayKey),
   );
@@ -43,7 +54,7 @@ export function TodayDashboard({
 
   const dayItems: SpotWithVerdict[] = useMemo(
     () =>
-      spotWeeks.map((week) => {
+      scopedSpotWeeks.map((week) => {
         const day = week.days.find((d) => d.dateKey === selectedDate);
         return {
           spot: week.spot,
@@ -51,7 +62,7 @@ export function TodayDashboard({
           hours: day?.hours ?? [],
         };
       }),
-    [spotWeeks, selectedDate],
+    [scopedSpotWeeks, selectedDate],
   );
 
   const total = dayItems.length;
@@ -63,7 +74,10 @@ export function TodayDashboard({
   const bestSpot = pickBestSpot(dayItems);
   const isToday = selectedDate === todayKey;
   const dateLabel = formatDateLabel(selectedDate, isToday);
-  const weekScores = useMemo(() => buildWeekScores(spotWeeks, dateKeys), [spotWeeks, dateKeys]);
+  const weekScores = useMemo(
+    () => buildWeekScores(scopedSpotWeeks, dateKeys),
+    [scopedSpotWeeks, dateKeys],
+  );
 
   return (
     <View style={styles.card}>
@@ -88,7 +102,7 @@ export function TodayDashboard({
                 <Text style={styles.scoreLabel}>{dayLabel}</Text>
                 <Text style={styles.scoreSub}>
                   <Text style={styles.scoreSubBold}>{goCount}</Text>
-                  {" "}of {total} spots GO
+                  {" "}of {total} {personalized ? "home spots" : "spots"} GO
                 </Text>
                 {bestSpot ? (
                   <Link href={`/spots/${bestSpot.spot.slug}`} asChild>
@@ -111,9 +125,21 @@ export function TodayDashboard({
                 ]}
               />
             </View>
-            <Pressable onPress={() => setActiveTile("score")}>
-              <Text style={styles.viewBreakdown}>View breakdown →</Text>
-            </Pressable>
+            <View style={styles.scoreFooterRow}>
+              <Pressable onPress={() => setActiveTile("score")}>
+                <Text style={styles.viewBreakdown}>View breakdown →</Text>
+              </Pressable>
+              {signedIn && homeSpotIds.size === 0 ? (
+                <Text style={styles.scopeHint} numberOfLines={2}>
+                  Open a spot to set it as a home spot
+                </Text>
+              ) : personalized ? (
+                <Text style={styles.scopeHint}>
+                  Personalized · {homeSpotIds.size} home
+                  {homeSpotIds.size === 1 ? "" : "s"}
+                </Text>
+              ) : null}
+            </View>
           </>
         )}
       </View>
@@ -716,7 +742,15 @@ const styles = StyleSheet.create({
     minHeight: 84,
   },
   tilePressed: { backgroundColor: "#fafafa" },
-  viewBreakdown: { marginTop: 12, fontSize: 12, color: "#71717a" },
+  viewBreakdown: { fontSize: 12, color: "#71717a" },
+  scoreFooterRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  scopeHint: { fontSize: 11, color: "#71717a", flexShrink: 1, textAlign: "right" },
   tileLabel: {
     fontSize: 9,
     fontWeight: "700",

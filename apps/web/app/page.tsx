@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   dbRowToSpot,
   fetchFavoriteSpotIds,
+  fetchHomeSpotIds,
   fetchPersonalFeed,
   fetchSpotWeek,
   getCommentCounts,
@@ -64,8 +65,9 @@ export default async function Home() {
     };
   });
 
-  const [favoriteIds, friendsToday] = await Promise.all([
+  const [favoriteIds, homeSpotIds, friendsToday] = await Promise.all([
     user ? fetchFavoriteSpotIds(authed, user.id) : Promise.resolve(new Set<string>()),
+    user ? fetchHomeSpotIds(authed, user.id) : Promise.resolve(new Set<string>()),
     user
       ? getFriendsOnWaterToday(authed, user.id, todayKey)
       : Promise.resolve({ count: 0, profiles: [] }),
@@ -131,6 +133,7 @@ export default async function Home() {
           friendsCount={friendsToday.count}
           friendsPreview={friendsToday.profiles}
           signedIn={!!user}
+          homeSpotIds={homeSpotIds}
         />
       </section>
 
