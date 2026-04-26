@@ -14,7 +14,7 @@ export default async function EditProfilePage() {
 
   const { data: row } = await supabase
     .from("users")
-    .select("display_name, bio")
+    .select("display_name, bio, avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -31,6 +31,7 @@ export default async function EditProfilePage() {
         userId={user.id}
         initialDisplayName={row?.display_name ?? null}
         initialBio={row?.bio ?? null}
+        initialAvatarUrl={row?.avatar_url ?? null}
       />
     </main>
   );

@@ -2,27 +2,62 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { updateOwnProfile } from "@windsiren/core";
+import { updateOwnProfile, uploadAvatar } from "@windsiren/core";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Props = {
   userId: string;
   initialDisplayName: string | null;
   initialBio: string | null;
+  initialAvatarUrl: string | null;
 };
 
-export function EditProfileForm({ userId, initialDisplayName, initialBio }: Props) {
+export function EditProfileForm({
+  userId,
+  initialDisplayName,
+  initialBio,
+  initialAvatarUrl,
+}: Props) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName ?? "");
   const [bio, setBio] = useState(initialBio ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setPendingFile(file);
+    setPendingPreview(file ? URL.createObjectURL(file) : null);
+    setError(null);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     const supabase = createSupabaseBrowserClient();
+
+    // Avatar first — uploadAvatar updates users.avatar_url itself, so the
+    // text-field updateOwnProfile call afterward doesn't need to repeat it.
+    if (pendingFile) {
+      const ext = pendingFile.name.split(".").pop() ?? "jpg";
+      const upload = await uploadAvatar(supabase, userId, pendingFile, {
+        ext,
+        contentType: pendingFile.type,
+      });
+      if (!upload.ok) {
+        setBusy(false);
+        setError(`Avatar upload failed: ${upload.message}`);
+        return;
+      }
+      setAvatarUrl(upload.url);
+      setPendingFile(null);
+      setPendingPreview(null);
+    }
+
     const result = await updateOwnProfile(supabase, userId, { displayName, bio });
     setBusy(false);
     if (!result.ok) {
@@ -33,8 +68,39 @@ export function EditProfileForm({ userId, initialDisplayName, initialBio }: Prop
     router.refresh();
   }
 
+  const previewSrc = pendingPreview ?? avatarUrl;
+
   return (
     <form onSubmit={onSubmit} className="mt-8 space-y-5">
+      <div className="flex items-center gap-4">
+        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
+          {previewSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewSrc} alt="Avatar preview" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl text-zinc-400">
+              {(displayName || "?").charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <label className="block">
+            <span className="text-sm font-medium">Profile photo</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={onPickFile}
+              className="mt-1 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-800 dark:text-zinc-300 dark:file:bg-zinc-100 dark:file:text-zinc-900"
+            />
+          </label>
+          {pendingFile ? (
+            <p className="mt-1 text-xs text-zinc-500">
+              New file selected — uploads on Save.
+            </p>
+          ) : null}
+        </div>
+      </div>
+
       <label className="block">
         <span className="text-sm font-medium">Display name</span>
         <input

@@ -106,3 +106,56 @@ export async function deletePhoto(
 function randomUuid(): string {
   return crypto.randomUUID();
 }
+
+// =============================================================================
+// Avatars
+// =============================================================================
+//
+// Avatars live in their own bucket (created in 20260426030000_avatars_bucket.sql).
+// Path layout: <userId>/<uuid>.<ext>. The first segment is the owner's
+// user_id, enforced by storage RLS on insert/update/delete. The public URL
+// gets stored on users.avatar_url so consumers can render an <img>
+// directly without re-resolving.
+
+const AVATAR_BUCKET = "avatars";
+
+export type AvatarUploadResult =
+  | { ok: true; url: string }
+  | { ok: false; reason: "validation" | "storage" | "db"; message: string };
+
+export async function uploadAvatar(
+  supabase: TypedSupabaseClient,
+  userId: string,
+  file: UploadFile,
+  options: { ext: string; contentType?: string },
+): Promise<AvatarUploadResult> {
+  const ext = options.ext.replace(/^\./, "").toLowerCase();
+  if (!/^(jpe?g|png|webp|heic|heif)$/.test(ext)) {
+    return { ok: false, reason: "validation", message: `unsupported extension: ${ext}` };
+  }
+
+  const path = `${userId}/${randomUuid()}.${ext}`;
+  const { error: uploadErr } = await supabase.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, file, { contentType: options.contentType, upsert: false });
+  if (uploadErr) return { ok: false, reason: "storage", message: uploadErr.message };
+
+  const url = getAvatarPublicUrl(supabase, path);
+  const { error: dbErr } = await supabase
+    .from("users")
+    .update({ avatar_url: url })
+    .eq("id", userId);
+  if (dbErr) {
+    // Best-effort cleanup of the orphaned object.
+    await supabase.storage.from(AVATAR_BUCKET).remove([path]).catch(() => undefined);
+    return { ok: false, reason: "db", message: dbErr.message };
+  }
+  return { ok: true, url };
+}
+
+export function getAvatarPublicUrl(
+  supabase: TypedSupabaseClient,
+  storagePath: string,
+): string {
+  return supabase.storage.from(AVATAR_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+}

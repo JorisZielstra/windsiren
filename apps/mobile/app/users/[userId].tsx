@@ -28,6 +28,7 @@ import {
   type UserStats,
 } from "@windsiren/core";
 import type { RsvpRow, SessionRow } from "@windsiren/supabase";
+import { Avatar } from "../../components/Avatar";
 import { SessionCard } from "../../components/SessionCard";
 import { UserStatsPanel } from "../../components/UserStatsPanel";
 import { useAuth } from "../../lib/auth-context";
@@ -154,13 +155,22 @@ export default function UserProfileScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.header}>
-              <Text style={styles.name}>{loaded.profile.display_name ?? "Anonymous kiter"}</Text>
+              <View style={styles.headerTopRow}>
+                <Avatar
+                  url={loaded.profile.avatar_url}
+                  name={loaded.profile.display_name}
+                  size={72}
+                />
+                <View style={styles.headerText}>
+                  <Text style={styles.name}>{loaded.profile.display_name ?? "Anonymous kiter"}</Text>
+                  <Text style={styles.counts}>
+                    <Text style={styles.countsNum}>{loaded.counts.followers}</Text> follower
+                    {loaded.counts.followers === 1 ? "" : "s"} ·{" "}
+                    <Text style={styles.countsNum}>{loaded.counts.following}</Text> following
+                  </Text>
+                </View>
+              </View>
               {loaded.profile.bio ? <Text style={styles.bio}>{loaded.profile.bio}</Text> : null}
-              <Text style={styles.counts}>
-                <Text style={styles.countsNum}>{loaded.counts.followers}</Text> follower
-                {loaded.counts.followers === 1 ? "" : "s"} ·{" "}
-                <Text style={styles.countsNum}>{loaded.counts.following}</Text> following
-              </Text>
               <View style={{ marginTop: 12 }}>
                 {isSelf ? (
                   <Link href="/profile-edit" asChild>
@@ -301,6 +311,8 @@ const styles = StyleSheet.create({
   errorBox: { margin: 16, padding: 16, backgroundColor: "#fef2f2", borderRadius: 8 },
   errorText: { color: "#991b1b" },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#e5e5e5" },
+  headerTopRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  headerText: { flex: 1 },
   name: { fontSize: 24, fontWeight: "700" },
   bio: { fontSize: 14, color: "#374151", marginTop: 6, lineHeight: 20 },
   counts: { marginTop: 10, fontSize: 13, color: "#6b7280" },

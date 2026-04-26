@@ -13,6 +13,7 @@ import {
   listSessionsForUser,
   listUserRsvps,
 } from "@windsiren/core";
+import { Avatar } from "@/components/Avatar";
 import { SessionCard } from "@/components/SessionCard";
 import { UserStatsPanel } from "@/components/UserStatsPanel";
 import { relativeTime } from "@/lib/relative-time";
@@ -91,23 +92,26 @@ export default async function UserProfilePage({
 
       <header className="mt-4 mb-10">
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-3xl font-bold tracking-tight">
-              {profile.display_name ?? "Anonymous kiter"}
-            </h1>
-            {profile.bio ? (
-              <p className="mt-2 text-zinc-700 dark:text-zinc-300">{profile.bio}</p>
-            ) : null}
-            <p className="mt-3 text-sm text-zinc-500">
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                {counts.followers}
-              </span>{" "}
-              follower{counts.followers === 1 ? "" : "s"} ·{" "}
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                {counts.following}
-              </span>{" "}
-              following
-            </p>
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <Avatar url={profile.avatar_url} name={profile.display_name} />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-3xl font-bold tracking-tight">
+                {profile.display_name ?? "Anonymous kiter"}
+              </h1>
+              {profile.bio ? (
+                <p className="mt-2 text-zinc-700 dark:text-zinc-300">{profile.bio}</p>
+              ) : null}
+              <p className="mt-3 text-sm text-zinc-500">
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {counts.followers}
+                </span>{" "}
+                follower{counts.followers === 1 ? "" : "s"} ·{" "}
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {counts.following}
+                </span>{" "}
+                following
+              </p>
+            </div>
           </div>
           <FollowButton targetUserId={userId} />
         </div>
