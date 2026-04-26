@@ -1,7 +1,8 @@
-import { Link, Stack, useLocalSearchParams } from "expo-router";
+import { Link, router, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  deleteSession,
   getCommentCounts,
   getLikeCounts,
   getLikedSessionIds,
@@ -43,6 +45,34 @@ export default function SessionDetailScreen() {
   const { user } = useAuth();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function confirmDelete(returnTo: string) {
+    Alert.alert(
+      "Delete this session?",
+      "This cannot be undone — comments, likes, and photos go with it.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            const result = await deleteSession(supabase, id);
+            setDeleting(false);
+            if (!result.ok) {
+              Alert.alert(
+                "Couldn't delete",
+                result.message ?? "Try again in a moment.",
+              );
+              return;
+            }
+            router.replace(returnTo);
+          },
+        },
+      ],
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +183,19 @@ export default function SessionDetailScreen() {
               <Text style={styles.headerPosted}>
                 posted {relativeTime(session.created_at)}
               </Text>
+              {user?.id === session.user_id ? (
+                <Pressable
+                  onPress={() =>
+                    confirmDelete(spot ? `/spots/${spot.slug}` : "/")
+                  }
+                  disabled={deleting}
+                  style={styles.deleteBtn}
+                >
+                  <Text style={[styles.deleteText, deleting && { opacity: 0.5 }]}>
+                    {deleting ? "Deleting…" : "Delete"}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -226,6 +269,8 @@ const styles = StyleSheet.create({
   spotPrefix: { fontSize: 13, color: "#71717a" },
   spotName: { fontSize: 13, fontWeight: "600", color: "#18181b" },
   headerRight: { alignItems: "flex-end" },
+  deleteBtn: { marginTop: 8 },
+  deleteText: { fontSize: 11, color: "#b91c1c", fontWeight: "600" },
   headerDate: { fontSize: 11, color: "#71717a" },
   headerPosted: { fontSize: 11, color: "#a1a1aa", marginTop: 2 },
   notes: {

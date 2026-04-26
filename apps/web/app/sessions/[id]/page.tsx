@@ -15,6 +15,7 @@ import { PhotoGrid } from "@/components/PhotoGrid";
 import { SessionWindHero } from "@/components/SessionWindHero";
 import { relativeTime } from "@/lib/relative-time";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { DeleteSessionButton } from "./DeleteSessionButton";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,14 @@ export default async function SessionDetailPage({
             <div className="shrink-0 text-right text-xs text-zinc-500">
               <div>{dateLabel}</div>
               <div className="mt-0.5">posted {relativeTime(session.created_at)}</div>
+              {viewer?.id === session.user_id ? (
+                <div className="mt-2">
+                  <DeleteSessionButton
+                    sessionId={session.id}
+                    returnTo={spot ? `/spots/${spot.slug}` : "/"}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </header>
