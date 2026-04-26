@@ -6,9 +6,14 @@ type AuthState = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  // Null while we don't yet know (initial render, or unauthed). True/false
+  // once the users.onboarded_at column has been read for the signed-in user.
+  // The root layout uses this to gate redirects to /welcome.
+  onboarded: boolean | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  refreshOnboarded: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -16,6 +21,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Hydrate initial session from AsyncStorage.
@@ -27,11 +33,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for sign-in / sign-out / token refresh events.
     const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      // Reset onboarded state on sign-out so the next sign-in re-fetches.
+      if (!newSession) setOnboarded(null);
     });
     return () => {
       data.subscription.unsubscribe();
     };
   }, []);
+
+  // Whenever the signed-in user changes, re-read users.onboarded_at.
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setOnboarded(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("users")
+      .select("onboarded_at")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setOnboarded(data?.onboarded_at != null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
+  const refreshOnboarded = useCallback(async () => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setOnboarded(null);
+      return;
+    }
+    const { data } = await supabase
+      .from("users")
+      .select("onboarded_at")
+      .eq("id", userId)
+      .maybeSingle();
+    setOnboarded(data?.onboarded_at != null);
+  }, [session?.user?.id]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -51,7 +94,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user: session?.user ?? null, session, loading, signIn, signUp, signOut }}
+      value={{
+        user: session?.user ?? null,
+        session,
+        loading,
+        onboarded,
+        signIn,
+        signUp,
+        signOut,
+        refreshOnboarded,
+      }}
     >
       {children}
     </AuthContext.Provider>

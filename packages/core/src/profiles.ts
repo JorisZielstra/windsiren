@@ -64,3 +64,32 @@ function normalizeText(v: string | null | undefined): string | null {
   const trimmed = v.trim();
   return trimmed.length === 0 ? null : trimmed;
 }
+
+// Stamps the user as having completed (or skipped) the welcome flow.
+// Idempotent — once set, the column stays set; re-calling is a no-op
+// for routing purposes since both branches read "non-null = onboarded".
+export async function markOnboarded(
+  supabase: TypedSupabaseClient,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { error } = await supabase
+    .from("users")
+    .update({ onboarded_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+// Reads only the onboarding flag — used by the routing guard so we don't
+// overfetch the full profile row on every request.
+export async function isOnboarded(
+  supabase: TypedSupabaseClient,
+  userId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("users")
+    .select("onboarded_at")
+    .eq("id", userId)
+    .maybeSingle();
+  return data?.onboarded_at != null;
+}

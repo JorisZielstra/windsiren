@@ -29,7 +29,35 @@ export async function middleware(request: NextRequest) {
   // IMPORTANT: getUser() triggers a token refresh if needed. Do NOT put any
   // logic between createServerClient and getUser — the session rehydration
   // must happen first.
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Onboarding guard: signed-in users with a null users.onboarded_at land
+  // on /welcome until they finish (or skip) the flow. Auth and welcome
+  // routes themselves are exempt so users can still sign in / sign out.
+  const path = request.nextUrl.pathname;
+  const isAuthRoute = path.startsWith("/auth");
+  const isWelcome = path === "/welcome";
+  const isApiRoute = path.startsWith("/api");
+  if (user && !isAuthRoute && !isApiRoute) {
+    const { data: row } = await supabase
+      .from("users")
+      .select("onboarded_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    const onboarded = row?.onboarded_at != null;
+    if (!onboarded && !isWelcome) {
+      const dest = request.nextUrl.clone();
+      dest.pathname = "/welcome";
+      return NextResponse.redirect(dest);
+    }
+    if (onboarded && isWelcome) {
+      const dest = request.nextUrl.clone();
+      dest.pathname = "/";
+      return NextResponse.redirect(dest);
+    }
+  }
 
   return response;
 }
