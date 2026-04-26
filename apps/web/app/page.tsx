@@ -72,16 +72,27 @@ export default async function Home() {
       ? getFriendsOnWaterToday(authed, user.id, todayKey)
       : Promise.resolve({ count: 0, profiles: [] }),
   ]);
-  const favorites = withVerdicts.filter((item) => favoriteIds.has(item.spot.id));
-
   // The dashboard's "Best:" anchor is the top spot across all NL — the
-  // collapsible below still pins favorites separately.
+  // collapsible below pins home spots and favorites separately.
   const bestSpot = pickHeroSpot(withVerdicts);
 
-  // Other spots: favorites pinned to the top, then non-favorites — alphabetical within each group.
-  const restFavorites = favorites.filter((f) => f.spot.id !== bestSpot?.spot.id);
+  // Other spots, in priority order. A spot only appears once: home > favorite > rest.
+  // This keeps the user's most relevant spots at the top regardless of name —
+  // otherwise "Andijk" wins by alphabet every time.
+  const restHomeSpots = withVerdicts.filter(
+    (item) => item.spot.id !== bestSpot?.spot.id && homeSpotIds.has(item.spot.id),
+  );
+  const restFavorites = withVerdicts.filter(
+    (item) =>
+      item.spot.id !== bestSpot?.spot.id &&
+      favoriteIds.has(item.spot.id) &&
+      !homeSpotIds.has(item.spot.id),
+  );
   const restNonFavorites = withVerdicts.filter(
-    (item) => item.spot.id !== bestSpot?.spot.id && !favoriteIds.has(item.spot.id),
+    (item) =>
+      item.spot.id !== bestSpot?.spot.id &&
+      !favoriteIds.has(item.spot.id) &&
+      !homeSpotIds.has(item.spot.id),
   );
 
 
@@ -140,13 +151,25 @@ export default async function Home() {
       <details className="mb-10 rounded-lg border border-zinc-200 dark:border-zinc-800">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
           <span className="mr-2 text-zinc-400 transition-transform group-open:rotate-90">▸</span>
-          Other spots ({restFavorites.length + restNonFavorites.length})
+          Other spots ({restHomeSpots.length + restFavorites.length + restNonFavorites.length})
         </summary>
         <div className="border-t border-zinc-100 px-4 pb-4 pt-2 dark:border-zinc-900">
+          {restHomeSpots.length > 0 ? (
+            <>
+              <h3 className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                🏠 Your home spots
+              </h3>
+              <ul className="space-y-2">
+                {restHomeSpots.map((item) => (
+                  <SpotRow key={item.spot.id} item={item} />
+                ))}
+              </ul>
+            </>
+          ) : null}
           {restFavorites.length > 0 ? (
             <>
-              <h3 className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Your spots
+              <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                ★ Favorites
               </h3>
               <ul className="space-y-2">
                 {restFavorites.map((item) => (

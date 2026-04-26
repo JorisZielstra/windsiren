@@ -149,14 +149,26 @@ export default function SpotsListScreen() {
     }, [user]),
   );
 
-  const favoriteItems = items?.filter((i) => favoriteIds.has(i.spot.id)) ?? [];
   // Best across all NL today — anchors the "Other spots" collapsible exclusion.
   const bestSpot = pickHeroSpot(items ?? []);
-  const restFavorites = favoriteItems.filter((f) => f.spot.id !== bestSpot?.spot.id);
-  const restNonFavorites = (items ?? []).filter(
-    (i) => i.spot.id !== bestSpot?.spot.id && !favoriteIds.has(i.spot.id),
+  // Other spots, in priority order. A spot only appears once: home > favorite > rest.
+  const restHomeSpots = (items ?? []).filter(
+    (i) => i.spot.id !== bestSpot?.spot.id && homeSpotIds.has(i.spot.id),
   );
-  const otherCount = restFavorites.length + restNonFavorites.length;
+  const restFavorites = (items ?? []).filter(
+    (i) =>
+      i.spot.id !== bestSpot?.spot.id &&
+      favoriteIds.has(i.spot.id) &&
+      !homeSpotIds.has(i.spot.id),
+  );
+  const restNonFavorites = (items ?? []).filter(
+    (i) =>
+      i.spot.id !== bestSpot?.spot.id &&
+      !favoriteIds.has(i.spot.id) &&
+      !homeSpotIds.has(i.spot.id),
+  );
+  const otherCount =
+    restHomeSpots.length + restFavorites.length + restNonFavorites.length;
   const todayKey = nlLocalDateKey(new Date());
 
   return (
@@ -193,9 +205,21 @@ export default function SpotsListScreen() {
               </Pressable>
               {otherOpen ? (
                 <View style={styles.otherBody}>
+                  {restHomeSpots.length > 0 ? (
+                    <>
+                      <Text style={[styles.subLabel, styles.subLabelHome]}>
+                        🏠 Your home spots
+                      </Text>
+                      {restHomeSpots.map((item) => (
+                        <SpotRow key={item.spot.id} item={item} />
+                      ))}
+                    </>
+                  ) : null}
                   {restFavorites.length > 0 ? (
                     <>
-                      <Text style={styles.subLabel}>Your spots</Text>
+                      <Text style={[styles.subLabel, restHomeSpots.length > 0 && styles.subLabelSpaced]}>
+                        ★ Favorites
+                      </Text>
                       {restFavorites.map((item) => (
                         <SpotRow key={item.spot.id} item={item} />
                       ))}
@@ -399,6 +423,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   subLabelSpaced: { paddingTop: 16 },
+  subLabelHome: { color: "#059669" },
   row: {
     flexDirection: "row",
     alignItems: "center",
