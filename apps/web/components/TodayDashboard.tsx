@@ -20,6 +20,7 @@ import {
   type HourlyForecast,
 } from "@windsiren/shared";
 import { DirectionNeedle } from "@/components/DirectionNeedle";
+import { TileModal, type TileKey } from "@/components/TileModal";
 
 type Props = {
   spotWeeks: SpotWeek[];
@@ -41,6 +42,7 @@ export function TodayDashboard({
   const [selectedDate, setSelectedDate] = useState<string>(
     dateKeys.includes(todayKey) ? todayKey : (dateKeys[0] ?? todayKey),
   );
+  const [activeTile, setActiveTile] = useState<TileKey | null>(null);
 
   // Slice each spot's week down to the selected date. Spots with no data
   // for that date get an empty hours[] + null verdict — same shape as a
@@ -120,17 +122,26 @@ export function TodayDashboard({
         )}
 
         {total > 0 ? (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
-            <div
-              className={[
-                "h-full",
-                scoreAccent
-                  ? "bg-emerald-500 dark:bg-emerald-400"
-                  : "bg-zinc-400 dark:bg-zinc-600",
-              ].join(" ")}
-              style={{ width: `${dayScore}%` }}
-            />
-          </div>
+          <>
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
+              <div
+                className={[
+                  "h-full",
+                  scoreAccent
+                    ? "bg-emerald-500 dark:bg-emerald-400"
+                    : "bg-zinc-400 dark:bg-zinc-600",
+                ].join(" ")}
+                style={{ width: `${dayScore}%` }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTile("score")}
+              className="mt-3 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              View breakdown →
+            </button>
+          </>
         ) : null}
       </div>
 
@@ -145,17 +156,36 @@ export function TodayDashboard({
 
       {/* Tile grid */}
       <div className="grid grid-cols-1 gap-px border-t border-zinc-100 bg-zinc-100 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-900 dark:bg-zinc-900">
-        <WindTile bestSpot={bestSpot} />
-        <AirTempTile bestSpot={bestSpot} />
+        <WindTile bestSpot={bestSpot} onClick={() => setActiveTile("wind")} />
+        <AirTempTile bestSpot={bestSpot} onClick={() => setActiveTile("airTemp")} />
         {signedIn ? (
-          <FriendsTile count={friendsCount} preview={friendsPreview} isToday={isToday} />
+          <FriendsTile
+            count={friendsCount}
+            preview={friendsPreview}
+            isToday={isToday}
+            onClick={isToday ? () => setActiveTile("friends") : undefined}
+          />
         ) : (
           <SignInTile />
         )}
-        <PeakWindowTile dayItems={dayItems} bestSpot={bestSpot} />
+        <PeakWindowTile
+          dayItems={dayItems}
+          bestSpot={bestSpot}
+          onClick={() => setActiveTile("peakWindow")}
+        />
         <DaylightTile bestSpot={bestSpot} selectedDate={selectedDate} />
-        <TrendTile bestSpot={bestSpot} />
+        <TrendTile bestSpot={bestSpot} onClick={() => setActiveTile("trend")} />
       </div>
+
+      <TileModal
+        tile={activeTile}
+        onClose={() => setActiveTile(null)}
+        dayItems={dayItems}
+        bestSpot={bestSpot}
+        spotWeeks={spotWeeks}
+        selectedDate={selectedDate}
+        friends={{ count: friendsCount, profiles: friendsPreview }}
+      />
     </section>
   );
 }
@@ -240,13 +270,19 @@ function scoreAccentClasses(score: number, isSelected: boolean): string {
 // Tiles
 // ---------------------------------------------------------------------------
 
-function WindTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function WindTile({
+  bestSpot,
+  onClick,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  onClick?: () => void;
+}) {
   if (!bestSpot) return <Tile label="Wind">—</Tile>;
   const dirs = daylightHours(bestSpot.hours).map((h) => h.windDirectionDeg);
   if (dirs.length === 0) return <Tile label="Wind">—</Tile>;
   const avgDeg = averageDirectionDeg(dirs);
   return (
-    <Tile label="Wind avg">
+    <Tile label="Wind avg" onClick={onClick}>
       <div className="flex items-center gap-2">
         <DirectionNeedle directionDeg={avgDeg} size={36} />
         <div className="leading-tight">
@@ -262,7 +298,13 @@ function WindTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   );
 }
 
-function AirTempTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function AirTempTile({
+  bestSpot,
+  onClick,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  onClick?: () => void;
+}) {
   if (!bestSpot) return <Tile label="Air temp">—</Tile>;
   const temps = daylightHours(bestSpot.hours)
     .map((h) => h.airTempC)
@@ -270,7 +312,7 @@ function AirTempTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   if (temps.length === 0) return <Tile label="Air temp">—</Tile>;
   const avg = temps.reduce((s, x) => s + x, 0) / temps.length;
   return (
-    <Tile label="Air temp" sub={`at ${bestSpot.spot.name}`}>
+    <Tile label="Air temp" sub={`at ${bestSpot.spot.name}`} onClick={onClick}>
       <span className="font-mono text-2xl font-bold tracking-tight">
         {Math.round(avg)}°C
       </span>
@@ -282,10 +324,12 @@ function FriendsTile({
   count,
   preview,
   isToday,
+  onClick,
 }: {
   count: number;
   preview: PublicProfile[];
   isToday: boolean;
+  onClick?: () => void;
 }) {
   if (!isToday) {
     return (
@@ -299,7 +343,7 @@ function FriendsTile({
   const names = preview.slice(0, 2).map((p) => p.display_name ?? "Someone");
   const extra = Math.max(0, count - names.length);
   return (
-    <Tile label="Friends" sub="out today">
+    <Tile label="Friends" sub="out today" onClick={onClick}>
       <span
         className={[
           "font-mono text-2xl font-bold tracking-tight",
@@ -334,9 +378,11 @@ function SignInTile() {
 function PeakWindowTile({
   dayItems,
   bestSpot,
+  onClick,
 }: {
   dayItems: SpotWithVerdict[];
   bestSpot: SpotWithVerdict | null;
+  onClick?: () => void;
 }) {
   if (!bestSpot) return <Tile label="Peak window">—</Tile>;
   const window = longestRideableRun(bestSpot);
@@ -355,13 +401,13 @@ function PeakWindowTile({
     : undefined;
   if (!window) {
     return (
-      <Tile label="Peak window" sub={sub}>
+      <Tile label="Peak window" sub={sub} onClick={onClick}>
         —
       </Tile>
     );
   }
   return (
-    <Tile label="Peak window" sub={sub}>
+    <Tile label="Peak window" sub={sub} onClick={onClick}>
       <span className="font-mono text-2xl font-bold tracking-tight">
         {pad2(window.startHour)}–{pad2(window.endHour)}h
       </span>
@@ -394,7 +440,13 @@ function DaylightTile({
   );
 }
 
-function TrendTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function TrendTile({
+  bestSpot,
+  onClick,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  onClick?: () => void;
+}) {
   if (!bestSpot) return <Tile label="Trend">—</Tile>;
   const trend = classifyWindTrend(bestSpot.hours);
   const arrow = trend === "rising" ? "↑" : trend === "dropping" ? "↓" : "→";
@@ -405,7 +457,7 @@ function TrendTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
         ? "text-amber-600 dark:text-amber-400"
         : "text-zinc-700 dark:text-zinc-300";
   return (
-    <Tile label="Trend" sub={`at ${bestSpot.spot.name}`}>
+    <Tile label="Trend" sub={`at ${bestSpot.spot.name}`} onClick={onClick}>
       <span className={`font-mono text-2xl font-bold tracking-tight ${accent}`}>
         {arrow} {labelForTrend(trend)}
       </span>
@@ -421,20 +473,34 @@ function Tile({
   label,
   sub,
   children,
+  onClick,
 }: {
   label: string;
   sub?: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="bg-white p-4 dark:bg-zinc-950">
+  const inner = (
+    <>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
         {label}
       </div>
       <div className="mt-1.5">{children}</div>
       {sub ? <div className="mt-1 truncate text-xs text-zinc-500">{sub}</div> : null}
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full bg-white p-4 text-left transition-colors hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <div className="bg-white p-4 dark:bg-zinc-950">{inner}</div>;
 }
 
 function collectDateKeys(spotWeeks: SpotWeek[]): string[] {

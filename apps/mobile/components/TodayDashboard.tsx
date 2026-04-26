@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   averageDirectionDeg,
@@ -18,6 +18,7 @@ import {
   type HourlyForecast,
 } from "@windsiren/shared";
 import { DirectionNeedle } from "./DirectionNeedle";
+import { TileModal, type TileKey } from "./TileModal";
 
 type Props = {
   spotWeeks: SpotWeek[];
@@ -38,6 +39,7 @@ export function TodayDashboard({
   const [selectedDate, setSelectedDate] = useState<string>(
     dateKeys.includes(todayKey) ? todayKey : (dateKeys[0] ?? todayKey),
   );
+  const [activeTile, setActiveTile] = useState<TileKey | null>(null);
 
   const dayItems: SpotWithVerdict[] = useMemo(
     () =>
@@ -109,6 +111,9 @@ export function TodayDashboard({
                 ]}
               />
             </View>
+            <Pressable onPress={() => setActiveTile("score")}>
+              <Text style={styles.viewBreakdown}>View breakdown →</Text>
+            </Pressable>
           </>
         )}
       </View>
@@ -122,17 +127,36 @@ export function TodayDashboard({
       />
 
       <View style={styles.tileGrid}>
-        <WindTile bestSpot={bestSpot} />
-        <AirTempTile bestSpot={bestSpot} />
+        <WindTile bestSpot={bestSpot} onPress={() => setActiveTile("wind")} />
+        <AirTempTile bestSpot={bestSpot} onPress={() => setActiveTile("airTemp")} />
         {signedIn ? (
-          <FriendsTile count={friendsCount} preview={friendsPreview} isToday={isToday} />
+          <FriendsTile
+            count={friendsCount}
+            preview={friendsPreview}
+            isToday={isToday}
+            onPress={isToday ? () => setActiveTile("friends") : undefined}
+          />
         ) : (
           <SignInTile />
         )}
-        <PeakWindowTile dayItems={dayItems} bestSpot={bestSpot} />
+        <PeakWindowTile
+          dayItems={dayItems}
+          bestSpot={bestSpot}
+          onPress={() => setActiveTile("peakWindow")}
+        />
         <DaylightTile bestSpot={bestSpot} selectedDate={selectedDate} />
-        <TrendTile bestSpot={bestSpot} />
+        <TrendTile bestSpot={bestSpot} onPress={() => setActiveTile("trend")} />
       </View>
+
+      <TileModal
+        tile={activeTile}
+        onClose={() => setActiveTile(null)}
+        dayItems={dayItems}
+        bestSpot={bestSpot}
+        spotWeeks={spotWeeks}
+        selectedDate={selectedDate}
+        friends={{ count: friendsCount, profiles: friendsPreview }}
+      />
     </View>
   );
 }
@@ -214,13 +238,19 @@ function scoreAccentColor(score: number): string {
 // Tiles
 // ---------------------------------------------------------------------------
 
-function WindTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function WindTile({
+  bestSpot,
+  onPress,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  onPress?: () => void;
+}) {
   if (!bestSpot) return <Tile label="WIND">—</Tile>;
   const dirs = daylightHours(bestSpot.hours).map((h) => h.windDirectionDeg);
   if (dirs.length === 0) return <Tile label="WIND">—</Tile>;
   const avgDeg = averageDirectionDeg(dirs);
   return (
-    <Tile label="WIND AVG">
+    <Tile label="WIND AVG" onPress={onPress}>
       <View style={styles.windRow}>
         <DirectionNeedle directionDeg={avgDeg} size={32} />
         <View>
@@ -232,7 +262,13 @@ function WindTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   );
 }
 
-function AirTempTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function AirTempTile({
+  bestSpot,
+  onPress,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  onPress?: () => void;
+}) {
   if (!bestSpot) return <Tile label="AIR TEMP">—</Tile>;
   const temps = daylightHours(bestSpot.hours)
     .map((h) => h.airTempC)
@@ -240,7 +276,7 @@ function AirTempTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   if (temps.length === 0) return <Tile label="AIR TEMP">—</Tile>;
   const avg = temps.reduce((s, x) => s + x, 0) / temps.length;
   return (
-    <Tile label="AIR TEMP" sub={`at ${bestSpot.spot.name}`}>
+    <Tile label="AIR TEMP" sub={`at ${bestSpot.spot.name}`} onPress={onPress}>
       <Text style={styles.tileValue}>{Math.round(avg)}°C</Text>
     </Tile>
   );
@@ -250,10 +286,12 @@ function FriendsTile({
   count,
   preview,
   isToday,
+  onPress,
 }: {
   count: number;
   preview: PublicProfile[];
   isToday: boolean;
+  onPress?: () => void;
 }) {
   if (!isToday) {
     return (
@@ -265,7 +303,7 @@ function FriendsTile({
   const names = preview.slice(0, 2).map((p) => p.display_name ?? "Someone");
   const extra = Math.max(0, count - names.length);
   return (
-    <Tile label="FRIENDS" sub="out today">
+    <Tile label="FRIENDS" sub="out today" onPress={onPress}>
       <Text style={[styles.tileValue, count > 0 && styles.tileAccent]}>{count}</Text>
       {names.length > 0 ? (
         <Text style={styles.tileSubSmall} numberOfLines={1}>
@@ -292,9 +330,11 @@ function SignInTile() {
 function PeakWindowTile({
   dayItems,
   bestSpot,
+  onPress,
 }: {
   dayItems: SpotWithVerdict[];
   bestSpot: SpotWithVerdict | null;
+  onPress?: () => void;
 }) {
   if (!bestSpot) return <Tile label="PEAK WINDOW">—</Tile>;
   const window = longestRideableRun(bestSpot);
@@ -313,13 +353,13 @@ function PeakWindowTile({
     : undefined;
   if (!window) {
     return (
-      <Tile label="PEAK WINDOW" sub={sub}>
+      <Tile label="PEAK WINDOW" sub={sub} onPress={onPress}>
         —
       </Tile>
     );
   }
   return (
-    <Tile label="PEAK WINDOW" sub={sub}>
+    <Tile label="PEAK WINDOW" sub={sub} onPress={onPress}>
       <Text style={styles.tileValue}>
         {pad2(window.startHour)}–{pad2(window.endHour)}h
       </Text>
@@ -352,7 +392,13 @@ function DaylightTile({
   );
 }
 
-function TrendTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function TrendTile({
+  bestSpot,
+  onPress,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  onPress?: () => void;
+}) {
   if (!bestSpot) return <Tile label="TREND">—</Tile>;
   const trend = classifyWindTrend(bestSpot.hours);
   const arrow = trend === "rising" ? "↑" : trend === "dropping" ? "↓" : "→";
@@ -363,7 +409,7 @@ function TrendTile({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
         ? styles.trendDropping
         : styles.trendHolding;
   return (
-    <Tile label="TREND" sub={`at ${bestSpot.spot.name}`}>
+    <Tile label="TREND" sub={`at ${bestSpot.spot.name}`} onPress={onPress}>
       <Text style={[styles.tileValue, accentStyle]}>
         {arrow} {labelForTrend(trend)}
       </Text>
@@ -379,13 +425,15 @@ function Tile({
   label,
   sub,
   children,
+  onPress,
 }: {
   label: string;
   sub?: string;
   children: React.ReactNode;
+  onPress?: () => void;
 }) {
-  return (
-    <View style={styles.tile}>
+  const inner = (
+    <>
       <Text style={styles.tileLabel}>{label}</Text>
       <View style={styles.tileBody}>
         {typeof children === "string" ? (
@@ -399,8 +447,19 @@ function Tile({
           {sub}
         </Text>
       ) : null}
-    </View>
+    </>
   );
+  if (onPress) {
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+        onPress={onPress}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+  return <View style={styles.tile}>{inner}</View>;
 }
 
 function collectDateKeys(spotWeeks: SpotWeek[]): string[] {
@@ -656,6 +715,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     minHeight: 84,
   },
+  tilePressed: { backgroundColor: "#fafafa" },
+  viewBreakdown: { marginTop: 12, fontSize: 12, color: "#71717a" },
   tileLabel: {
     fontSize: 9,
     fontWeight: "700",
