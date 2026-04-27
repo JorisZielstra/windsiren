@@ -2,6 +2,7 @@ import { bucketHours, type HourBucket } from "@windsiren/core";
 import {
   cardinalDirection,
   msToKnots,
+  windKnColor,
   type HourlyForecast,
   type Spot,
 } from "@windsiren/shared";
@@ -26,102 +27,113 @@ export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
     return <p className="text-xs text-zinc-500">No hourly data to show.</p>;
   }
 
-  // Group buckets by their NL local date so the day header can colspan
-  // each day's columns. Order is preserved (oldest → newest).
-  const days: { dateKey: string; buckets: HourBucket[] }[] = [];
-  let last = "";
-  for (const b of buckets) {
-    if (b.dateKey !== last) {
-      days.push({ dateKey: b.dateKey, buckets: [b] });
-      last = b.dateKey;
-    } else {
-      days[days.length - 1]!.buckets.push(b);
-    }
-  }
-
   return (
     <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
       <table className="border-separate border-spacing-0 text-sm">
         <thead>
-          {/* Day row — one cell per day, spans that day's bucket columns */}
+          {/* Header — one stacked cell per bucket: day · time-window.
+              Repeating the day on every column makes mid-week scrolls
+              readable, especially on mobile. Day boundaries get a
+              left border accent so the eye still picks them up. */}
           <tr>
-            <th className={`${stickyLeft} ${headerCell} align-bottom`}>Day</th>
-            {days.map((d) => (
-              <th
-                key={d.dateKey}
-                colSpan={d.buckets.length}
-                className="border-b border-l border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
-              >
-                {formatDayHeader(d.dateKey)}
-              </th>
-            ))}
-          </tr>
-
-          {/* Time row — one cell per bucket */}
-          <tr>
-            <th className={`${stickyLeft} ${headerCell}`}>Time</th>
-            {buckets.map((b) => (
-              <th
-                key={b.startTime}
-                style={{ width: COL_WIDTH, minWidth: COL_WIDTH }}
-                className="border-b border-zinc-200 bg-zinc-50 px-1 py-1 text-center font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                <div>{pad2(b.startLocalHour)}:00</div>
-                <div className="text-zinc-400">–</div>
-                <div>{pad2((b.startLocalHour + windowSize) % 24)}:00</div>
-              </th>
-            ))}
+            <th className={`${stickyLeft} ${headerCell} align-bottom`}>Time</th>
+            {buckets.map((b, i) => {
+              const dayBoundary = i > 0 && b.dateKey !== buckets[i - 1]!.dateKey;
+              return (
+                <th
+                  key={b.startTime}
+                  style={{ width: COL_WIDTH, minWidth: COL_WIDTH }}
+                  className={[
+                    "border-b border-zinc-200 bg-zinc-50 px-1 py-1.5 text-center dark:border-zinc-800 dark:bg-zinc-900",
+                    dayBoundary
+                      ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+                      : "",
+                  ].join(" ")}
+                >
+                  <div className="text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-300">
+                    {formatDayHeader(b.dateKey)}
+                  </div>
+                  <div className="mt-1 font-mono text-[10px] leading-tight text-zinc-500">
+                    <div>{pad2(b.startLocalHour)}:00</div>
+                    <div className="text-zinc-400">–</div>
+                    <div>{pad2((b.startLocalHour + windowSize) % 24)}:00</div>
+                  </div>
+                </th>
+              );
+            })}
           </tr>
         </thead>
 
         <tbody>
           <MetricRow label="Wind kn">
-            {buckets.map((b) => (
-              <CellWind key={b.startTime} kn={msToKnots(b.windSpeedMs)} />
+            {buckets.map((b, i) => (
+              <CellKn
+                key={b.startTime}
+                kn={msToKnots(b.windSpeedMs)}
+                bold
+                dayBoundary={isDayBoundary(buckets, i)}
+              />
             ))}
           </MetricRow>
 
           <MetricRow label="Gust kn">
-            {buckets.map((b) => (
-              <CellNum
+            {buckets.map((b, i) => (
+              <CellKn
                 key={b.startTime}
-                value={Math.round(msToKnots(b.gustMs))}
-                muted
+                kn={msToKnots(b.gustMs)}
+                dayBoundary={isDayBoundary(buckets, i)}
               />
             ))}
           </MetricRow>
 
           <MetricRow label="Dir">
-            {buckets.map((b) => (
+            {buckets.map((b, i) => (
               <CellDirection
                 key={b.startTime}
                 deg={b.windDirectionDeg}
                 cardinal={cardinalDirection(b.windDirectionDeg)}
+                dayBoundary={isDayBoundary(buckets, i)}
               />
             ))}
           </MetricRow>
 
           <MetricRow label="Air °C">
-            {buckets.map((b) => (
-              <CellNum key={b.startTime} value={Math.round(b.airTempC)} />
+            {buckets.map((b, i) => (
+              <CellNum
+                key={b.startTime}
+                value={Math.round(b.airTempC)}
+                dayBoundary={isDayBoundary(buckets, i)}
+              />
             ))}
           </MetricRow>
 
           <MetricRow label="Rain">
-            {buckets.map((b) => (
-              <CellRain key={b.startTime} mm={b.precipitationMm} />
+            {buckets.map((b, i) => (
+              <CellRain
+                key={b.startTime}
+                mm={b.precipitationMm}
+                dayBoundary={isDayBoundary(buckets, i)}
+              />
             ))}
           </MetricRow>
 
           <MetricRow label="Ride">
-            {buckets.map((b) => (
-              <CellRide key={b.startTime} rideable={b.rideable} />
+            {buckets.map((b, i) => (
+              <CellRide
+                key={b.startTime}
+                rideable={b.rideable}
+                dayBoundary={isDayBoundary(buckets, i)}
+              />
             ))}
           </MetricRow>
         </tbody>
       </table>
     </div>
   );
+}
+
+function isDayBoundary(buckets: HourBucket[], i: number): boolean {
+  return i > 0 && buckets[i]!.dateKey !== buckets[i - 1]!.dateKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,11 +164,28 @@ function MetricRow({
   );
 }
 
-function CellWind({ kn }: { kn: number }) {
-  const tint = windTint(kn);
+// Renders a kn value with the shared wind-color background. Used for
+// both wind and gust rows; bold flag distinguishes the primary value.
+function CellKn({
+  kn,
+  bold = false,
+  dayBoundary = false,
+}: {
+  kn: number;
+  bold?: boolean;
+  dayBoundary?: boolean;
+}) {
+  const { bg, fg } = windKnColor(kn);
   return (
     <td
-      className={`border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-sm font-semibold dark:border-zinc-900 ${tint}`}
+      style={{ backgroundColor: bg, color: fg }}
+      className={[
+        "border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-sm dark:border-zinc-900",
+        bold ? "font-semibold" : "",
+        dayBoundary
+          ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+          : "",
+      ].join(" ")}
     >
       {Math.round(kn)}
     </td>
@@ -166,15 +195,21 @@ function CellWind({ kn }: { kn: number }) {
 function CellNum({
   value,
   muted = false,
+  dayBoundary = false,
 }: {
   value: number;
   muted?: boolean;
+  dayBoundary?: boolean;
 }) {
   return (
     <td
-      className={`border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-sm dark:border-zinc-900 ${
-        muted ? "text-zinc-500" : ""
-      }`}
+      className={[
+        "border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-sm dark:border-zinc-900",
+        muted ? "text-zinc-500" : "",
+        dayBoundary
+          ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+          : "",
+      ].join(" ")}
     >
       {value}
     </td>
@@ -184,14 +219,21 @@ function CellNum({
 function CellDirection({
   deg,
   cardinal,
+  dayBoundary = false,
 }: {
   deg: number;
   cardinal: string;
+  dayBoundary?: boolean;
 }) {
   return (
     <td
       title={`${cardinal} (${Math.round(deg)}°)`}
-      className="border-b border-zinc-100 px-1 py-1 dark:border-zinc-900"
+      className={[
+        "border-b border-zinc-100 px-1 py-1 dark:border-zinc-900",
+        dayBoundary
+          ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+          : "",
+      ].join(" ")}
     >
       <div className="flex flex-col items-center justify-center gap-0.5">
         <Arrow degrees={deg} />
@@ -201,10 +243,17 @@ function CellDirection({
   );
 }
 
-function CellRain({ mm }: { mm: number }) {
+function CellRain({ mm, dayBoundary = false }: { mm: number; dayBoundary?: boolean }) {
   if (mm <= 0) {
     return (
-      <td className="border-b border-zinc-100 px-1 py-1.5 text-center text-xs text-zinc-300 dark:border-zinc-900 dark:text-zinc-700">
+      <td
+        className={[
+          "border-b border-zinc-100 px-1 py-1.5 text-center text-xs text-zinc-300 dark:border-zinc-900 dark:text-zinc-700",
+          dayBoundary
+            ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+            : "",
+        ].join(" ")}
+      >
         —
       </td>
     );
@@ -215,16 +264,35 @@ function CellRain({ mm }: { mm: number }) {
       : "";
   return (
     <td
-      className={`border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-xs dark:border-zinc-900 ${tint}`}
+      className={[
+        "border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-xs dark:border-zinc-900",
+        tint,
+        dayBoundary
+          ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+          : "",
+      ].join(" ")}
     >
       {mm.toFixed(1)}
     </td>
   );
 }
 
-function CellRide({ rideable }: { rideable: boolean }) {
+function CellRide({
+  rideable,
+  dayBoundary = false,
+}: {
+  rideable: boolean;
+  dayBoundary?: boolean;
+}) {
   return (
-    <td className="border-b border-zinc-100 px-1 py-1.5 dark:border-zinc-900">
+    <td
+      className={[
+        "border-b border-zinc-100 px-1 py-1.5 dark:border-zinc-900",
+        dayBoundary
+          ? "border-l-2 border-l-zinc-300 dark:border-l-zinc-700"
+          : "",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-center">
         <span
           className={[
@@ -258,14 +326,6 @@ function Arrow({ degrees }: { degrees: number }) {
       <path d="M6 1 L9.5 8 L6 6.5 L2.5 8 Z" fill="currentColor" />
     </svg>
   );
-}
-
-function windTint(kn: number): string {
-  if (kn < 8) return "bg-zinc-50 text-zinc-400 dark:bg-zinc-950 dark:text-zinc-600";
-  if (kn < 15) return "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-300";
-  if (kn < 25) return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300";
-  if (kn < 35) return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300";
-  return "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-300";
 }
 
 function pad2(n: number): string {
