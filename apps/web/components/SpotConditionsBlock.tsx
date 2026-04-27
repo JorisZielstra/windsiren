@@ -22,6 +22,9 @@ import { WeekStrip } from "@/components/WeekStrip";
 type Props = {
   spotWeek: SpotWeek;
   todayKey: string;
+  // When true, drop the outer rounded border — used when nested inside
+  // a parent card that already provides it (e.g. spot detail page).
+  flush?: boolean;
 };
 
 // Per-spot version of the home dashboard's tile grid + week strip. Lives
@@ -32,7 +35,7 @@ type Props = {
 // Per-day score formula (different from the dashboard's "% of NL spots
 // GO"): rideable-hours / 13 × 100. 13 is the max NL daylight hours
 // (08:00–20:00 local), so a banger day caps at 100.
-export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
+export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props) {
   const dateKeys = useMemo(
     () => spotWeek.days.map((d) => d.dateKey).sort(),
     [spotWeek],
@@ -80,7 +83,14 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
   }, [spotWeek]);
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <section
+      className={[
+        "bg-white dark:bg-zinc-950",
+        flush
+          ? "border-t border-zinc-100 dark:border-zinc-900"
+          : "rounded-xl border border-zinc-200 dark:border-zinc-800",
+      ].join(" ")}
+    >
       <div className="px-6 pt-5 pb-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
           Conditions for {spotWeek.spot.name}

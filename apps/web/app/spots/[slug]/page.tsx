@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import {
   cardinalDirection,
   msToKnots,
+  windKnColor,
   type HourlyForecast,
 } from "@windsiren/shared";
 import { supabase } from "@/lib/supabase";
@@ -126,28 +127,33 @@ export default async function SpotDetailPage({
         ) : null}
       </header>
 
-      {liveObservation ? <LivePanel live={liveObservation} /> : null}
-
-      {spotWeek.days.length > 0 ? (
-        <section className="mb-10">
-          <SpotConditionsBlock spotWeek={spotWeek} todayKey={todayKey} />
-        </section>
-      ) : null}
-
-      {forecastError ? (
-        <ErrorCard title="Forecast unavailable" message={forecastError} />
-      ) : (
-        <section className="mb-10">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Forecast — next {spotWeek.days.length} days
-          </h2>
-          <WindguruDayTable
-            spot={spot}
-            hours={allHours}
-            tideEvents={tideEvents}
-          />
-        </section>
-      )}
+      {/* Three weather panels stacked into one card with internal dividers.
+          The user explicitly wants snug placement — no gaps — so we strip
+          per-panel rounded corners and borders here and let the outer
+          container own them. */}
+      <section className="mb-10 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        {liveObservation ? <LivePanel live={liveObservation} /> : null}
+        {spotWeek.days.length > 0 ? (
+          <SpotConditionsBlock spotWeek={spotWeek} todayKey={todayKey} flush />
+        ) : null}
+        {forecastError ? (
+          <div className="border-t border-zinc-100 px-4 py-4 dark:border-zinc-900">
+            <ErrorCard title="Forecast unavailable" message={forecastError} />
+          </div>
+        ) : (
+          <div className="border-t border-zinc-100 dark:border-zinc-900">
+            <h2 className="px-4 pt-4 pb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Forecast — next {spotWeek.days.length} days
+            </h2>
+            <WindguruDayTable
+              spot={spot}
+              hours={allHours}
+              tideEvents={tideEvents}
+              flush
+            />
+          </div>
+        )}
+      </section>
 
       <SpotSocial spot={spot} />
     </main>
@@ -158,7 +164,7 @@ function LivePanel({ live }: { live: LiveObservation }) {
   const { observation: o, ageMinutes } = live;
   const stale = ageMinutes > 20; // KNMI publishes every 10 min; 20+ min = something's off
   return (
-    <section className="mb-8 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="bg-zinc-50 p-4 dark:bg-zinc-900">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
           Live — KNMI station {o.stationId}
@@ -169,24 +175,45 @@ function LivePanel({ live }: { live: LiveObservation }) {
         </span>
       </div>
       <div className="flex flex-wrap gap-6">
-        <Stat label="Wind" value={`${msToKn(o.windSpeedMs)} kn`} sub={cardinalDirection(o.windDirectionDeg)} />
-        <Stat label="Gust" value={`${msToKn(o.gustMs)} kn`} />
+        <Stat label="Wind" value={`${msToKn(o.windSpeedMs)} kn`} sub={cardinalDirection(o.windDirectionDeg)} kn={msToKnots(o.windSpeedMs)} />
+        <Stat label="Gust" value={`${msToKn(o.gustMs)} kn`} kn={msToKnots(o.gustMs)} />
         <Stat label="Dir" value={`${Math.round(o.windDirectionDeg)}°`} />
         {o.airTempC !== null ? <Stat label="Air" value={`${o.airTempC.toFixed(0)}°C`} /> : null}
         {o.pressureHpa !== null ? (
           <Stat label="Pressure" value={`${o.pressureHpa.toFixed(0)} hPa`} />
         ) : null}
       </div>
-    </section>
+    </div>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  kn,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  // When provided, the value pill picks up the shared wind-knot color.
+  kn?: number;
+}) {
+  const tint = kn !== undefined ? windKnColor(kn) : null;
   return (
     <div>
       <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
       <div className="mt-0.5 flex items-baseline gap-1">
-        <span className="font-mono text-xl font-semibold">{value}</span>
+        {tint ? (
+          <span
+            style={{ backgroundColor: tint.bg, color: tint.fg }}
+            className="rounded-md px-2 py-0.5 font-mono text-xl font-semibold"
+          >
+            {value}
+          </span>
+        ) : (
+          <span className="font-mono text-xl font-semibold">{value}</span>
+        )}
         {sub ? <span className="text-xs text-zinc-500">{sub}</span> : null}
       </div>
     </div>

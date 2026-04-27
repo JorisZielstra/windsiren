@@ -15,6 +15,9 @@ type Props = {
   // Optional tide events spanning the same time range. When provided
   // and non-empty, the table renders a tide curve as the bottom row.
   tideEvents?: TidePoint[];
+  // When true, drop the outer rounded border — for nesting inside a
+  // parent card that already owns the chrome.
+  flush?: boolean;
 };
 
 const COL_WIDTH = 56; // px — wide enough for "08:00 – 10:00" wrapped on 2 lines
@@ -30,6 +33,7 @@ export function WindguruDayTable({
   hours,
   windowSize = 2,
   tideEvents,
+  flush = false,
 }: Props) {
   const buckets = bucketHours(hours, spot, windowSize);
   if (buckets.length === 0) {
@@ -37,7 +41,13 @@ export function WindguruDayTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+    <div
+      className={
+        flush
+          ? "overflow-x-auto"
+          : "overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800"
+      }
+    >
       <table className="border-separate border-spacing-0 text-sm">
         <thead>
           {/* Header — one stacked cell per bucket: day · time-window.
