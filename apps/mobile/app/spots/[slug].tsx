@@ -19,9 +19,9 @@ import {
   addHomeSpot,
   cardinalLabelPositions,
   dbRowToSpot,
-  fetch3DayForecast,
   fetchDailyTides,
   fetchLiveObservation,
+  fetchSpotWeek,
   formatDayLabel,
   formatHourLabel,
   groupHoursByLocalDay,
@@ -35,13 +35,17 @@ import {
   safeSectorPaths,
   type DayGroup,
   type LiveObservation,
+  type SpotWeek,
 } from "@windsiren/core";
+import { SpotConditionsBlock } from "../../components/SpotConditionsBlock";
 import { SpotSocial } from "../../components/SpotSocial";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
 type Loaded = {
   spot: Spot;
+  spotWeek: SpotWeek;
+  todayKey: string;
   days: DayGroup[];
   tidesPerDay: TidePoint[][];
   live: LiveObservation | null;
@@ -137,17 +141,19 @@ export default function SpotDetailScreen() {
       const spot = dbRowToSpot(row);
 
       try {
-        const [hours, live] = await Promise.all([
-          fetch3DayForecast(spot),
+        const [spotWeek, live] = await Promise.all([
+          fetchSpotWeek(spot, 7),
           fetchLiveObservation(spot, process.env.EXPO_PUBLIC_KNMI_API_KEY),
         ]);
         if (cancelled) return;
-        const days = groupHoursByLocalDay(hours).slice(0, 3);
+        const allHours = spotWeek.days.flatMap((d) => d.hours);
+        const days = groupHoursByLocalDay(allHours).slice(0, 3);
         const tidesPerDay = await Promise.all(
           days.map((d) => fetchDailyTides(spot, d.dateKey)),
         );
         if (cancelled) return;
-        setLoaded({ spot, days, tidesPerDay, live });
+        const todayKey = nlLocalDateKey(new Date());
+        setLoaded({ spot, spotWeek, todayKey, days, tidesPerDay, live });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -174,6 +180,14 @@ export default function SpotDetailScreen() {
             liveDirection={loaded.live?.observation.windDirectionDeg ?? null}
           />
           {loaded.live ? <LivePanel live={loaded.live} /> : null}
+          {loaded.spotWeek.days.length > 0 ? (
+            <View style={{ marginVertical: 16 }}>
+              <SpotConditionsBlock
+                spotWeek={loaded.spotWeek}
+                todayKey={loaded.todayKey}
+              />
+            </View>
+          ) : null}
           {loaded.days.map((day, i) => (
             <DaySection
               key={day.dateKey}
@@ -667,3 +681,12 @@ const styles = StyleSheet.create({
   verdictPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   verdictText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
 });
+
+function nlLocalDateKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}

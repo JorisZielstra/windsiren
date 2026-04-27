@@ -14,15 +14,16 @@ import {
 import { supabase } from "@/lib/supabase";
 import {
   dbRowToSpot,
-  fetch3DayForecast,
   fetchDailyTides,
   fetchLiveObservation,
+  fetchSpotWeek,
   formatDayLabel,
   formatHourLabel,
   groupHoursByLocalDay,
   type DayGroup,
   type LiveObservation,
 } from "@windsiren/core";
+import { SpotConditionsBlock } from "@/components/SpotConditionsBlock";
 import { FavoriteButton } from "./FavoriteButton";
 import { HomeSpotButton } from "./HomeSpotButton";
 import { SpotSocial } from "./SpotSocial";
@@ -53,20 +54,20 @@ export default async function SpotDetailPage({
 
   const spot = dbRowToSpot(row);
 
-  // Fetch forecast + live observation in parallel; live-observation failure
-  // is non-fatal and handled inside the helper (returns null).
+  // Fetch a full 7-day partition + live observation in parallel. The
+  // SpotConditionsBlock at the top wants the whole week; the per-day
+  // forecast section below uses the first 3 days as before.
+  // Live-observation failure is non-fatal (returns null).
   const knmiKey = process.env.NEXT_PUBLIC_KNMI_API_KEY;
-  const [forecastResult, liveObservation] = await Promise.all([
-    fetch3DayForecast(spot).then(
-      (hours) => ({ ok: true as const, hours }),
-      (err) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }),
-    ),
+  const [spotWeek, liveObservation] = await Promise.all([
+    fetchSpotWeek(spot, 7),
     fetchLiveObservation(spot, knmiKey),
   ]);
 
-  const hours: HourlyForecast[] = forecastResult.ok ? forecastResult.hours : [];
-  const forecastError = forecastResult.ok ? null : forecastResult.error;
-  const days = groupHoursByLocalDay(hours).slice(0, 3);
+  const allHours: HourlyForecast[] = spotWeek.days.flatMap((d) => d.hours);
+  const forecastError = spotWeek.days.length === 0 ? "No forecast data" : null;
+  const days = groupHoursByLocalDay(allHours).slice(0, 3);
+  const todayKey = nlLocalDateKey(new Date());
 
   // Once we know the three local-date keys, fetch tide events for each in parallel.
   const tidesPerDay = await Promise.all(days.map((d) => fetchDailyTides(spot, d.dateKey)));
@@ -130,6 +131,12 @@ export default async function SpotDetailPage({
       </header>
 
       {liveObservation ? <LivePanel live={liveObservation} /> : null}
+
+      {spotWeek.days.length > 0 ? (
+        <section className="mb-10">
+          <SpotConditionsBlock spotWeek={spotWeek} todayKey={todayKey} />
+        </section>
+      ) : null}
 
       {forecastError ? (
         <ErrorCard title="Forecast unavailable" message={forecastError} />
@@ -315,6 +322,15 @@ function VerdictBadge({ verdict }: { verdict: Verdict }) {
       {labels[verdict.decision]}
     </span>
   );
+}
+
+function nlLocalDateKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 function ErrorCard({ title, message }: { title: string; message: string }) {
