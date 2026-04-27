@@ -24,6 +24,7 @@ import {
   type LiveObservation,
 } from "@windsiren/core";
 import { SpotConditionsBlock } from "@/components/SpotConditionsBlock";
+import { WindguruDayTable } from "@/components/WindguruDayTable";
 import { FavoriteButton } from "./FavoriteButton";
 import { HomeSpotButton } from "./HomeSpotButton";
 import { SpotSocial } from "./SpotSocial";
@@ -230,55 +231,8 @@ function DaySection({
 
       {tides.length > 0 ? <TideRow tides={tides} /> : null}
 
-      <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-            <tr>
-              <th className="px-3 py-2 font-medium">Time</th>
-              <th className="px-3 py-2 font-medium">Wind</th>
-              <th className="px-3 py-2 font-medium">Gust</th>
-              <th className="px-3 py-2 font-medium">Dir</th>
-              <th className="px-3 py-2 font-medium">Air</th>
-              <th className="px-3 py-2 font-medium">Rain</th>
-              <th className="px-3 py-2 text-right font-medium">Ride</th>
-            </tr>
-          </thead>
-          <tbody>
-            {day.hours.map((h) => (
-              <HourRow key={h.time} hour={h} spot={spot} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <WindguruDayTable spot={spot} hours={day.hours} />
     </section>
-  );
-}
-
-function HourRow({ hour, spot }: { hour: HourlyForecast; spot: Spot }) {
-  const rideable = isHourRideable(hour, spot, DEFAULT_THRESHOLDS);
-  return (
-    <tr className="border-t border-zinc-100 dark:border-zinc-800">
-      <td className="px-3 py-2 font-mono text-xs">{formatHourLabel(hour.time)}</td>
-      <td className="px-3 py-2 font-mono">{msToKnots(hour.windSpeedMs).toFixed(0)} kn</td>
-      <td className="px-3 py-2 font-mono text-zinc-500">
-        {msToKnots(hour.gustMs).toFixed(0)} kn
-      </td>
-      <td className="px-3 py-2 text-xs">
-        {cardinalDirection(hour.windDirectionDeg)}{" "}
-        <span className="text-zinc-400">({Math.round(hour.windDirectionDeg)}°)</span>
-      </td>
-      <td className="px-3 py-2 font-mono text-xs">{hour.airTempC.toFixed(0)}°C</td>
-      <td className="px-3 py-2 font-mono text-xs text-zinc-500">
-        {hour.precipitationMm > 0 ? `${hour.precipitationMm.toFixed(1)} mm` : "—"}
-      </td>
-      <td className="px-3 py-2 text-right">
-        {rideable ? (
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-label="rideable" />
-        ) : (
-          <span className="inline-block h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-700" aria-label="not rideable" />
-        )}
-      </td>
-    </tr>
   );
 }
 

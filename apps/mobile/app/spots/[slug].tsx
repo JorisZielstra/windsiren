@@ -39,6 +39,7 @@ import {
 } from "@windsiren/core";
 import { SpotConditionsBlock } from "../../components/SpotConditionsBlock";
 import { SpotSocial } from "../../components/SpotSocial";
+import { WindguruDayTable } from "../../components/WindguruDayTable";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
@@ -464,48 +465,7 @@ function DaySection({
 
       {tides.length > 0 ? <TideRow tides={tides} /> : null}
 
-      <View style={styles.table}>
-        <View style={[styles.tableRow, styles.tableHeader]}>
-          <Text style={[styles.cell, styles.cellTime, styles.cellHeader]}>Time</Text>
-          <Text style={[styles.cell, styles.cellWind, styles.cellHeader]}>Wind</Text>
-          <Text style={[styles.cell, styles.cellGust, styles.cellHeader]}>Gust</Text>
-          <Text style={[styles.cell, styles.cellDir, styles.cellHeader]}>Dir</Text>
-          <Text style={[styles.cell, styles.cellTemp, styles.cellHeader]}>Air</Text>
-          <Text style={[styles.cell, styles.cellRide, styles.cellHeader]}>•</Text>
-        </View>
-        {day.hours.map((h) => (
-          <HourRow key={h.time} hour={h} spot={spot} />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function HourRow({ hour, spot }: { hour: HourlyForecast; spot: Spot }) {
-  const rideable = isHourRideable(hour, spot, DEFAULT_THRESHOLDS);
-  return (
-    <View style={styles.tableRow}>
-      <Text style={[styles.cell, styles.cellTime, styles.cellMono]}>
-        {formatHourLabel(hour.time)}
-      </Text>
-      <Text style={[styles.cell, styles.cellWind, styles.cellMono]}>
-        {msToKnots(hour.windSpeedMs).toFixed(0)}
-      </Text>
-      <Text style={[styles.cell, styles.cellGust, styles.cellMono, styles.cellMuted]}>
-        {msToKnots(hour.gustMs).toFixed(0)}
-      </Text>
-      <Text style={[styles.cell, styles.cellDir]}>{cardinalDirection(hour.windDirectionDeg)}</Text>
-      <Text style={[styles.cell, styles.cellTemp, styles.cellMono, styles.cellMuted]}>
-        {hour.airTempC.toFixed(0)}°
-      </Text>
-      <View style={styles.cellRide}>
-        <View
-          style={[
-            styles.dot,
-            { backgroundColor: rideable ? "#10b981" : "#d4d4d8" },
-          ]}
-        />
-      </View>
+      <WindguruDayTable spot={spot} hours={day.hours} />
     </View>
   );
 }
