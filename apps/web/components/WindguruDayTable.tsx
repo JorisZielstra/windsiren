@@ -5,12 +5,16 @@ import {
   windKnColor,
   type HourlyForecast,
   type Spot,
+  type TidePoint,
 } from "@windsiren/shared";
 
 type Props = {
   spot: Spot;
   hours: HourlyForecast[];
   windowSize?: number;
+  // Optional tide events spanning the same time range. When provided
+  // and non-empty, the table renders a tide curve as the bottom row.
+  tideEvents?: TidePoint[];
 };
 
 const COL_WIDTH = 56; // px — wide enough for "08:00 – 10:00" wrapped on 2 lines
@@ -21,7 +25,12 @@ const COL_WIDTH = 56; // px — wide enough for "08:00 – 10:00" wrapped on 2 l
 // fetched window (today + ~13 future days = up to 14 days). The
 // first column is sticky so the row labels stay visible as the user
 // scrolls right through the week.
-export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
+export function WindguruDayTable({
+  spot,
+  hours,
+  windowSize = 2,
+  tideEvents,
+}: Props) {
   const buckets = bucketHours(hours, spot, windowSize);
   if (buckets.length === 0) {
     return <p className="text-xs text-zinc-500">No hourly data to show.</p>;
@@ -126,10 +135,159 @@ export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
               />
             ))}
           </MetricRow>
+
+          {tideEvents && tideEvents.length > 0 ? (
+            <TideRow buckets={buckets} tideEvents={tideEvents} />
+          ) : null}
         </tbody>
       </table>
     </div>
   );
+}
+
+// Tide row spans every bucket column with one wide SVG so the curve
+// flows continuously across day boundaries. Heights are interpolated
+// between consecutive high/low events using a half-cosine — that's
+// the natural shape of a tide cycle, no surprises at the extremes.
+function TideRow({
+  buckets,
+  tideEvents,
+}: {
+  buckets: HourBucket[];
+  tideEvents: TidePoint[];
+}) {
+  if (buckets.length === 0) return null;
+
+  // Sort once; downstream code assumes ascending time.
+  const events = [...tideEvents].sort((a, b) =>
+    a.at < b.at ? -1 : a.at > b.at ? 1 : 0,
+  );
+  if (events.length < 2) return null;
+
+  const startTimeMs = new Date(buckets[0]!.startTime).getTime();
+  // Each bucket spans `windowSize` hours. The last bucket's end is its
+  // start + windowSize; we approximate with 2h here since that's our
+  // default and the only value used.
+  const totalHours = buckets.length * 2;
+  const totalMs = totalHours * 3600 * 1000;
+  const totalWidth = buckets.length * COL_WIDTH;
+  const height = 56;
+  const padY = 6;
+  const innerH = height - padY * 2;
+
+  // Sample heights at fixed pixel intervals across the full row.
+  const samples: { x: number; height: number }[] = [];
+  const SAMPLE_STEP_PX = 4;
+  for (let x = 0; x <= totalWidth; x += SAMPLE_STEP_PX) {
+    const t = startTimeMs + (x / totalWidth) * totalMs;
+    samples.push({ x, height: tideHeightAt(events, t) });
+  }
+
+  // Normalise heights to (0, 1) inside the row.
+  const heights = samples.map((s) => s.height);
+  const lo = Math.min(...heights);
+  const hi = Math.max(...heights);
+  const range = Math.max(1, hi - lo);
+  const yOf = (h: number) => padY + innerH * (1 - (h - lo) / range);
+
+  const linePath = samples
+    .map(
+      (s, i) => `${i === 0 ? "M" : "L"} ${s.x.toFixed(1)} ${yOf(s.height).toFixed(1)}`,
+    )
+    .join(" ");
+  const fillPath = `${linePath} L ${totalWidth} ${height} L 0 ${height} Z`;
+
+  // Annotate each high/low extreme inside the visible time range.
+  const visibleEvents = events.filter((e) => {
+    const t = new Date(e.at).getTime();
+    return t >= startTimeMs && t <= startTimeMs + totalMs;
+  });
+
+  return (
+    <tr>
+      <th className={`${stickyLeft} px-3 text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500 border-b border-zinc-100 dark:border-zinc-900`}>
+        Tide
+      </th>
+      <td
+        colSpan={buckets.length}
+        className="border-b border-zinc-100 p-0 dark:border-zinc-900"
+        style={{ height }}
+      >
+        <svg
+          width={totalWidth}
+          height={height}
+          viewBox={`0 0 ${totalWidth} ${height}`}
+          preserveAspectRatio="none"
+          className="block"
+        >
+          <path d={fillPath} className="fill-sky-100/70 dark:fill-sky-950/40" />
+          <path
+            d={linePath}
+            fill="none"
+            strokeWidth={1.5}
+            className="stroke-sky-600 dark:stroke-sky-400"
+          />
+          {visibleEvents.map((e) => {
+            const t = new Date(e.at).getTime();
+            const x = ((t - startTimeMs) / totalMs) * totalWidth;
+            const y = yOf(tideHeightAt(events, t));
+            const labelY = e.type === "high" ? y - 6 : y + 12;
+            return (
+              <g key={e.at}>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={2}
+                  className="fill-sky-700 dark:fill-sky-300"
+                />
+                <text
+                  x={x}
+                  y={labelY}
+                  textAnchor="middle"
+                  className="fill-zinc-700 text-[9px] font-mono dark:fill-zinc-300"
+                >
+                  {fmtNlClock(new Date(e.at))}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </td>
+    </tr>
+  );
+}
+
+// Cosine-interpolate height between adjacent extremes. Reasonable
+// approximation of a tide cycle (half-period sine wave between
+// successive high+low). Outside the events range, return the nearest
+// extreme's height.
+function tideHeightAt(events: TidePoint[], t: number): number {
+  if (events.length === 0) return 0;
+  const first = events[0]!;
+  const last = events[events.length - 1]!;
+  if (t <= new Date(first.at).getTime()) return first.heightCm;
+  if (t >= new Date(last.at).getTime()) return last.heightCm;
+  for (let i = 0; i < events.length - 1; i++) {
+    const a = events[i]!;
+    const b = events[i + 1]!;
+    const aT = new Date(a.at).getTime();
+    const bT = new Date(b.at).getTime();
+    if (t >= aT && t <= bT) {
+      const f = (t - aT) / (bT - aT);
+      // Half-cosine: starts at heightA, ends at heightB, smooth at both ends.
+      return a.heightCm + (b.heightCm - a.heightCm) * (1 - Math.cos(f * Math.PI)) / 2;
+    }
+  }
+  return last.heightCm;
+}
+
+function fmtNlClock(d: Date): string {
+  return new Intl.DateTimeFormat("en-NL", {
+    timeZone: "Europe/Amsterdam",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
 }
 
 function isDayBoundary(buckets: HourBucket[], i: number): boolean {

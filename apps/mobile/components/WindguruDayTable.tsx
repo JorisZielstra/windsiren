@@ -1,5 +1,6 @@
+import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Circle, Path, Text as SvgText } from "react-native-svg";
 import { bucketHours, type HourBucket } from "@windsiren/core";
 import {
   cardinalDirection,
@@ -7,12 +8,14 @@ import {
   windKnColor,
   type HourlyForecast,
   type Spot,
+  type TidePoint,
 } from "@windsiren/shared";
 
 type Props = {
   spot: Spot;
   hours: HourlyForecast[];
   windowSize?: number;
+  tideEvents?: TidePoint[];
 };
 
 const COL_WIDTH = 60;
@@ -27,11 +30,18 @@ const HEADER_HEIGHT = 60; // fits "Mo 27/4" + "08:00 / – / 10:00"
 // Each column header repeats the day + date so mid-week scroll
 // positions stay legible — important on phones where only ~5 columns
 // fit on screen at once.
-export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
+export function WindguruDayTable({
+  spot,
+  hours,
+  windowSize = 2,
+  tideEvents,
+}: Props) {
   const buckets = bucketHours(hours, spot, windowSize);
   if (buckets.length === 0) {
     return <Text style={styles.empty}>No hourly data to show.</Text>;
   }
+
+  const showTide = tideEvents && tideEvents.length > 1;
 
   return (
     <View style={styles.outer}>
@@ -45,26 +55,147 @@ export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
         <LegendCell label="Air °C" />
         <LegendCell label="Rain" />
         <LegendCell label="Ride" />
+        {showTide ? (
+          <View style={[styles.legendCell, { height: TIDE_ROW_HEIGHT }]}>
+            <Text style={styles.legendText}>Tide</Text>
+          </View>
+        ) : null}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: "row" }}>
-          {buckets.map((b, i) => {
-            const dayBoundary =
-              i > 0 && b.dateKey !== buckets[i - 1]!.dateKey;
-            return (
-              <BucketColumn
-                key={b.startTime}
-                bucket={b}
-                windowSize={windowSize}
-                dayBoundary={dayBoundary}
-              />
-            );
-          })}
+        <View>
+          <View style={{ flexDirection: "row" }}>
+            {buckets.map((b, i) => {
+              const dayBoundary =
+                i > 0 && b.dateKey !== buckets[i - 1]!.dateKey;
+              return (
+                <BucketColumn
+                  key={b.startTime}
+                  bucket={b}
+                  windowSize={windowSize}
+                  dayBoundary={dayBoundary}
+                />
+              );
+            })}
+          </View>
+          {showTide ? (
+            <TideRow buckets={buckets} tideEvents={tideEvents!} />
+          ) : null}
         </View>
       </ScrollView>
     </View>
   );
+}
+
+const TIDE_ROW_HEIGHT = 56;
+
+function TideRow({
+  buckets,
+  tideEvents,
+}: {
+  buckets: HourBucket[];
+  tideEvents: TidePoint[];
+}) {
+  const events = [...tideEvents].sort((a, b) =>
+    a.at < b.at ? -1 : a.at > b.at ? 1 : 0,
+  );
+  if (events.length < 2) return null;
+
+  const startTimeMs = new Date(buckets[0]!.startTime).getTime();
+  const totalHours = buckets.length * 2;
+  const totalMs = totalHours * 3600 * 1000;
+  const totalWidth = buckets.length * COL_WIDTH;
+  const padY = 6;
+  const innerH = TIDE_ROW_HEIGHT - padY * 2;
+
+  const samples: { x: number; height: number }[] = [];
+  const SAMPLE_STEP_PX = 4;
+  for (let x = 0; x <= totalWidth; x += SAMPLE_STEP_PX) {
+    const t = startTimeMs + (x / totalWidth) * totalMs;
+    samples.push({ x, height: tideHeightAt(events, t) });
+  }
+  const heights = samples.map((s) => s.height);
+  const lo = Math.min(...heights);
+  const hi = Math.max(...heights);
+  const range = Math.max(1, hi - lo);
+  const yOf = (h: number) => padY + innerH * (1 - (h - lo) / range);
+
+  const linePath = samples
+    .map(
+      (s, i) =>
+        `${i === 0 ? "M" : "L"} ${s.x.toFixed(1)} ${yOf(s.height).toFixed(1)}`,
+    )
+    .join(" ");
+  const fillPath = `${linePath} L ${totalWidth} ${TIDE_ROW_HEIGHT} L 0 ${TIDE_ROW_HEIGHT} Z`;
+
+  const visibleEvents = events.filter((e) => {
+    const t = new Date(e.at).getTime();
+    return t >= startTimeMs && t <= startTimeMs + totalMs;
+  });
+
+  return (
+    <View
+      style={{
+        width: totalWidth,
+        height: TIDE_ROW_HEIGHT,
+        borderTopWidth: 1,
+        borderTopColor: "#f4f4f5",
+      }}
+    >
+      <Svg width={totalWidth} height={TIDE_ROW_HEIGHT}>
+        <Path d={fillPath} fill="#e0f2fe" />
+        <Path d={linePath} stroke="#0284c7" strokeWidth={1.5} fill="none" />
+        {visibleEvents.map((e) => {
+          const t = new Date(e.at).getTime();
+          const x = ((t - startTimeMs) / totalMs) * totalWidth;
+          const y = yOf(tideHeightAt(events, t));
+          const labelY = e.type === "high" ? y - 4 : y + 12;
+          return (
+            <React.Fragment key={e.at}>
+              <Circle cx={x} cy={y} r={2} fill="#0369a1" />
+              <SvgText
+                x={x}
+                y={labelY}
+                textAnchor="middle"
+                fontSize={9}
+                fill="#3f3f46"
+              >
+                {fmtNlClock(new Date(e.at))}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
+function tideHeightAt(events: TidePoint[], t: number): number {
+  if (events.length === 0) return 0;
+  const first = events[0]!;
+  const last = events[events.length - 1]!;
+  if (t <= new Date(first.at).getTime()) return first.heightCm;
+  if (t >= new Date(last.at).getTime()) return last.heightCm;
+  for (let i = 0; i < events.length - 1; i++) {
+    const a = events[i]!;
+    const b = events[i + 1]!;
+    const aT = new Date(a.at).getTime();
+    const bT = new Date(b.at).getTime();
+    if (t >= aT && t <= bT) {
+      const f = (t - aT) / (bT - aT);
+      return a.heightCm + (b.heightCm - a.heightCm) * (1 - Math.cos(f * Math.PI)) / 2;
+    }
+  }
+  return last.heightCm;
+}
+
+function fmtNlClock(d: Date): string {
+  return new Intl.DateTimeFormat("en-NL", {
+    timeZone: "Europe/Amsterdam",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
 }
 
 function BucketColumn({

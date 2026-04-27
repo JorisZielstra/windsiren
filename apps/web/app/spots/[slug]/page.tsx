@@ -4,7 +4,6 @@ import {
   cardinalDirection,
   msToKnots,
   type HourlyForecast,
-  type TidePoint,
 } from "@windsiren/shared";
 import { supabase } from "@/lib/supabase";
 import {
@@ -12,7 +11,6 @@ import {
   fetchDailyTides,
   fetchLiveObservation,
   fetchSpotWeek,
-  formatHourLabel,
   type LiveObservation,
 } from "@windsiren/core";
 import { SpotConditionsBlock } from "@/components/SpotConditionsBlock";
@@ -61,13 +59,14 @@ export default async function SpotDetailPage({
   const forecastError = spotWeek.days.length === 0 ? "No forecast data" : null;
   const todayKey = nlLocalDateKey(new Date());
 
-  // Tide events for tide-sensitive spots — fetch the next 3 days only.
-  // Per-day tide overlays in the table are a future enhancement; for now
-  // we render the next few high/low events as a separate strip.
-  const tideDays = spotWeek.days.slice(0, 3).map((d) => d.dateKey);
+  // Tide events for tide-sensitive spots — fetched for every day in
+  // the forecast window so the weather table can render a continuous
+  // tide curve. Insensitive spots return [] and the row hides itself.
+  const tideDays = spotWeek.days.map((d) => d.dateKey);
   const tidesPerDay = await Promise.all(
     tideDays.map((dateKey) => fetchDailyTides(spot, dateKey)),
   );
+  const tideEvents = tidesPerDay.flat();
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
@@ -142,8 +141,11 @@ export default async function SpotDetailPage({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Forecast — next {spotWeek.days.length} days
           </h2>
-          <UpcomingTides days={tideDays} tidesPerDay={tidesPerDay} />
-          <WindguruDayTable spot={spot} hours={allHours} />
+          <WindguruDayTable
+            spot={spot}
+            hours={allHours}
+            tideEvents={tideEvents}
+          />
         </section>
       )}
 
@@ -195,56 +197,6 @@ function msToKn(ms: number): string {
   return msToKnots(ms).toFixed(0);
 }
 
-// Compact tide-events strip rendered above the forecast table for
-// tide-sensitive spots. Keeps the legacy per-day layout but stacks
-// only the few days we actually fetched (3) — matches the prior UX
-// without per-day verdict cards (those moved to SpotConditionsBlock).
-function UpcomingTides({
-  days,
-  tidesPerDay,
-}: {
-  days: string[];
-  tidesPerDay: TidePoint[][];
-}) {
-  const hasAny = tidesPerDay.some((arr) => arr.length > 0);
-  if (!hasAny) return null;
-  return (
-    <div className="mb-4 flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
-      {days.map((dateKey, i) => {
-        const tides = tidesPerDay[i] ?? [];
-        if (tides.length === 0) return null;
-        return (
-          <div key={dateKey} className="flex items-center gap-2">
-            <span className="font-mono text-[10px] uppercase text-zinc-400">
-              {dateKey.slice(8, 10)}/{dateKey.slice(5, 7)}
-            </span>
-            {tides.map((t) => (
-              <span
-                key={t.at}
-                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 font-mono dark:border-zinc-800 dark:bg-zinc-950"
-              >
-                <span
-                  className={
-                    t.type === "high"
-                      ? "text-sky-600 dark:text-sky-400"
-                      : "text-amber-600 dark:text-amber-400"
-                  }
-                >
-                  {t.type === "high" ? "▲" : "▼"}
-                </span>
-                <span>{formatHourLabel(t.at)}</span>
-                <span className="text-zinc-400">
-                  {t.heightCm >= 0 ? "+" : ""}
-                  {t.heightCm} cm
-                </span>
-              </span>
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function nlLocalDateKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {

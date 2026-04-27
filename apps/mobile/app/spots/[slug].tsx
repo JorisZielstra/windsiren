@@ -17,7 +17,6 @@ import {
   fetchDailyTides,
   fetchLiveObservation,
   fetchSpotWeek,
-  formatHourLabel,
   fetchHomeSpotIds,
   isHomeSpot,
   isSpotFavorited,
@@ -39,8 +38,7 @@ type Loaded = {
   spot: Spot;
   spotWeek: SpotWeek;
   todayKey: string;
-  tideDays: string[];
-  tidesPerDay: TidePoint[][];
+  tideEvents: TidePoint[];
   live: LiveObservation | null;
 };
 
@@ -139,15 +137,16 @@ export default function SpotDetailScreen() {
           fetchLiveObservation(spot, process.env.EXPO_PUBLIC_KNMI_API_KEY),
         ]);
         if (cancelled) return;
-        // Tide events for the next 3 days (rendered as a compact strip
-        // above the 14-day forecast table).
-        const tideDays = spotWeek.days.slice(0, 3).map((d) => d.dateKey);
+        // Tide events for every day in the forecast window — drives
+        // the integrated tide row inside the weather table.
+        const tideDays = spotWeek.days.map((d) => d.dateKey);
         const tidesPerDay = await Promise.all(
           tideDays.map((dateKey) => fetchDailyTides(spot, dateKey)),
         );
         if (cancelled) return;
+        const tideEvents = tidesPerDay.flat();
         const todayKey = nlLocalDateKey(new Date());
-        setLoaded({ spot, spotWeek, todayKey, tideDays, tidesPerDay, live });
+        setLoaded({ spot, spotWeek, todayKey, tideEvents, live });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -187,13 +186,10 @@ export default function SpotDetailScreen() {
               <Text style={styles.sectionLabel}>
                 Forecast — next {loaded.spotWeek.days.length} days
               </Text>
-              <UpcomingTides
-                days={loaded.tideDays}
-                tidesPerDay={loaded.tidesPerDay}
-              />
               <WindguruDayTable
                 spot={loaded.spot}
                 hours={loaded.spotWeek.days.flatMap((d) => d.hours)}
+                tideEvents={loaded.tideEvents}
               />
             </View>
           ) : null}
@@ -437,51 +433,6 @@ function LiveStat({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-// Compact tide-events strip rendered above the forecast table for
-// tide-sensitive spots. We keep the legacy chip styling but stack
-// only the few days we actually fetched (next 3) — per-day verdict
-// cards moved into SpotConditionsBlock.
-function UpcomingTides({
-  days,
-  tidesPerDay,
-}: {
-  days: string[];
-  tidesPerDay: TidePoint[][];
-}) {
-  const hasAny = tidesPerDay.some((arr) => arr.length > 0);
-  if (!hasAny) return null;
-  return (
-    <View style={{ marginBottom: 12, gap: 8 }}>
-      {days.map((dateKey, i) => {
-        const tides = tidesPerDay[i] ?? [];
-        if (tides.length === 0) return null;
-        return (
-          <View
-            key={dateKey}
-            style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}
-          >
-            <Text style={styles.tideDateLabel}>
-              {dateKey.slice(8, 10)}/{dateKey.slice(5, 7)}
-            </Text>
-            {tides.map((t) => (
-              <View key={t.at} style={styles.tideChip}>
-                <Text style={t.type === "high" ? styles.tideArrowHigh : styles.tideArrowLow}>
-                  {t.type === "high" ? "▲" : "▼"}
-                </Text>
-                <Text style={styles.tideTime}>{formatHourLabel(t.at)}</Text>
-                <Text style={styles.tideHeight}>
-                  {t.heightCm >= 0 ? "+" : ""}
-                  {t.heightCm} cm
-                </Text>
-              </View>
-            ))}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   scroll: { padding: 16 },
@@ -579,28 +530,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginBottom: 10,
   },
-  tideDateLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#a1a1aa",
-    letterSpacing: 0.4,
-    fontVariant: ["tabular-nums"],
-  },
-  tideChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#e5e5e5",
-    borderRadius: 6,
-    backgroundColor: "#fff",
-  },
-  tideArrowHigh: { color: "#0369a1", fontSize: 11 },
-  tideArrowLow: { color: "#b45309", fontSize: 11 },
-  tideTime: { fontSize: 11, fontVariant: ["tabular-nums"] },
-  tideHeight: { fontSize: 10, color: "#9ca3af", fontVariant: ["tabular-nums"] },
   table: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#e5e5e5",
