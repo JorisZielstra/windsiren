@@ -7,7 +7,7 @@ import {
   type SpotWithVerdict,
 } from "@windsiren/core";
 import type { HourlyForecast } from "@windsiren/shared";
-import { countRideable } from "./dashboard-utils";
+import { addDaysToKey, countRideable, mondayOfDate, weekDates } from "./dashboard-utils";
 import {
   AirTempTile,
   DaylightTile,
@@ -144,11 +144,30 @@ export function TodayDashboard({
       </View>
 
       <WeekStrip
-        dateKeys={dateKeys}
+        visibleDates={weekDates(mondayOfDate(selectedDate))}
         weekScores={weekScores}
         selectedDate={selectedDate}
         todayKey={todayKey}
         onSelect={setSelectedDate}
+        onPrevWeek={
+          dateKeys.length > 0 && mondayOfDate(selectedDate) > dateKeys[0]!
+            ? () => {
+                const target = addDaysToKey(selectedDate, -7);
+                setSelectedDate(target < dateKeys[0]! ? dateKeys[0]! : target);
+              }
+            : undefined
+        }
+        onNextWeek={
+          dateKeys.length > 0 &&
+          addDaysToKey(mondayOfDate(selectedDate), 6) <
+            dateKeys[dateKeys.length - 1]!
+            ? () => {
+                const target = addDaysToKey(selectedDate, 7);
+                const last = dateKeys[dateKeys.length - 1]!;
+                setSelectedDate(target > last ? last : target);
+              }
+            : undefined
+        }
       />
 
       <View style={styles.tileGrid}>

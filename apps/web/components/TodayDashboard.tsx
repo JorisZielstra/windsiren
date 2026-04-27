@@ -16,7 +16,12 @@ import {
   TrendTile,
   WindTile,
 } from "@/components/DayTiles";
-import { countRideable } from "@/components/dashboard-utils";
+import {
+  addDaysToKey,
+  countRideable,
+  mondayOfDate,
+  weekDates,
+} from "@/components/dashboard-utils";
 import { TileModal, type TileKey } from "@/components/TileModal";
 import { WeekStrip } from "@/components/WeekStrip";
 
@@ -178,13 +183,33 @@ export function TodayDashboard({
         ) : null}
       </div>
 
-      {/* Week strip */}
+      {/* Week strip — Mon-Sun of the selectedDate's week, with carousel
+          arrows that shift selectedDate by ±7 days clamped to the
+          available data window (today + ~15 days). */}
       <WeekStrip
-        dateKeys={dateKeys}
+        visibleDates={weekDates(mondayOfDate(selectedDate))}
         weekScores={weekScores}
         selectedDate={selectedDate}
         todayKey={todayKey}
         onSelect={setSelectedDate}
+        onPrevWeek={
+          dateKeys.length > 0 && mondayOfDate(selectedDate) > dateKeys[0]!
+            ? () => {
+                const target = addDaysToKey(selectedDate, -7);
+                setSelectedDate(target < dateKeys[0]! ? dateKeys[0]! : target);
+              }
+            : undefined
+        }
+        onNextWeek={
+          dateKeys.length > 0 &&
+          addDaysToKey(mondayOfDate(selectedDate), 6) < dateKeys[dateKeys.length - 1]!
+            ? () => {
+                const target = addDaysToKey(selectedDate, 7);
+                const last = dateKeys[dateKeys.length - 1]!;
+                setSelectedDate(target > last ? last : target);
+              }
+            : undefined
+        }
       />
 
       {/* Tile grid */}

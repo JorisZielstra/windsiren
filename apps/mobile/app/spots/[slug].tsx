@@ -135,7 +135,7 @@ export default function SpotDetailScreen() {
 
       try {
         const [spotWeek, live] = await Promise.all([
-          fetchSpotWeek(spot, 14),
+          fetchSpotWeek(spot, 16),
           fetchLiveObservation(spot, process.env.EXPO_PUBLIC_KNMI_API_KEY),
         ]);
         if (cancelled) return;

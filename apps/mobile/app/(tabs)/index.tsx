@@ -80,7 +80,9 @@ export default function SpotsListScreen() {
         const spots = (rows ?? []).map(dbRowToSpot);
         const todayKey = nlLocalDateKey(new Date());
         const [weeks, favIds, homeIds, friends] = await Promise.all([
-          Promise.all(spots.map((s) => fetchSpotWeek(s, 7))),
+          // 16 days = Open-Meteo's free-tier max. Lets the WeekStrip
+          // carousel show this week + ~2 weeks of future data.
+          Promise.all(spots.map((s) => fetchSpotWeek(s, 16))),
           user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
           user ? fetchHomeSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
           user

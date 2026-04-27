@@ -10,7 +10,12 @@ import {
   TrendTile,
   WindTile,
 } from "@/components/DayTiles";
-import { countRideable } from "@/components/dashboard-utils";
+import {
+  addDaysToKey,
+  countRideable,
+  mondayOfDate,
+  weekDates,
+} from "@/components/dashboard-utils";
 import { TileModal, type TileKey } from "@/components/TileModal";
 import { WeekStrip } from "@/components/WeekStrip";
 
@@ -86,11 +91,30 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
       </div>
 
       <WeekStrip
-        dateKeys={dateKeys}
+        visibleDates={weekDates(mondayOfDate(selectedDate))}
         weekScores={weekScores}
         selectedDate={selectedDate}
         todayKey={todayKey}
         onSelect={setSelectedDate}
+        onPrevWeek={
+          dateKeys.length > 0 && mondayOfDate(selectedDate) > dateKeys[0]!
+            ? () => {
+                const target = addDaysToKey(selectedDate, -7);
+                setSelectedDate(target < dateKeys[0]! ? dateKeys[0]! : target);
+              }
+            : undefined
+        }
+        onNextWeek={
+          dateKeys.length > 0 &&
+          addDaysToKey(mondayOfDate(selectedDate), 6) <
+            dateKeys[dateKeys.length - 1]!
+            ? () => {
+                const target = addDaysToKey(selectedDate, 7);
+                const last = dateKeys[dateKeys.length - 1]!;
+                setSelectedDate(target > last ? last : target);
+              }
+            : undefined
+        }
       />
 
       <div className="grid grid-cols-1 gap-px border-t border-zinc-100 bg-zinc-100 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-900 dark:bg-zinc-900">

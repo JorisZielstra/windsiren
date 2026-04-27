@@ -52,7 +52,9 @@ export default async function Home() {
   }
 
   const spots = (rows ?? []).map(dbRowToSpot);
-  const spotWeeks = await Promise.all(spots.map((s) => fetchSpotWeek(s, 7)));
+  // 16 days = Open-Meteo's free-tier max. Lets the WeekStrip carousel
+  // show this week + ~2 weeks of future data.
+  const spotWeeks = await Promise.all(spots.map((s) => fetchSpotWeek(s, 16)));
 
   const todayKey = nlLocalDateKey(new Date());
 

@@ -78,3 +78,33 @@ export function weekdayShort(dateKey: string): string {
     .toLocaleDateString("en-NL", { weekday: "short", timeZone: "Europe/Amsterdam" })
     .toUpperCase();
 }
+
+export function mondayOfDate(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  const dow = d.getUTCDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+export function addDaysToKey(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function weekDates(monday: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => addDaysToKey(monday, i));
+}
+
+const NL_WEEKDAYS_SHORT = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+export function formatWeekdayDate(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  const localDate = new Date(
+    d.toLocaleString("en-US", { timeZone: "Europe/Amsterdam" }),
+  );
+  const weekday = NL_WEEKDAYS_SHORT[localDate.getDay()] ?? "";
+  const day = parseInt(dateKey.slice(8, 10), 10);
+  const month = parseInt(dateKey.slice(5, 7), 10);
+  return `${weekday} ${day}/${month}`;
+}

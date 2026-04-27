@@ -53,7 +53,7 @@ export default async function SpotDetailPage({
   // Live-observation failure is non-fatal (returns null).
   const knmiKey = process.env.NEXT_PUBLIC_KNMI_API_KEY;
   const [spotWeek, liveObservation] = await Promise.all([
-    fetchSpotWeek(spot, 14),
+    fetchSpotWeek(spot, 16),
     fetchLiveObservation(spot, knmiKey),
   ]);
 
