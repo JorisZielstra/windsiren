@@ -2,14 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   cardinalDirection,
-  evaluateDay,
-  DEFAULT_THRESHOLDS,
-  isHourRideable,
   msToKnots,
   type HourlyForecast,
-  type Spot,
   type TidePoint,
-  type Verdict,
 } from "@windsiren/shared";
 import { supabase } from "@/lib/supabase";
 import {
@@ -17,10 +12,7 @@ import {
   fetchDailyTides,
   fetchLiveObservation,
   fetchSpotWeek,
-  formatDayLabel,
   formatHourLabel,
-  groupHoursByLocalDay,
-  type DayGroup,
   type LiveObservation,
 } from "@windsiren/core";
 import { SpotConditionsBlock } from "@/components/SpotConditionsBlock";
@@ -55,23 +47,27 @@ export default async function SpotDetailPage({
 
   const spot = dbRowToSpot(row);
 
-  // Fetch a full 7-day partition + live observation in parallel. The
-  // SpotConditionsBlock at the top wants the whole week; the per-day
-  // forecast section below uses the first 3 days as before.
+  // Fetch a full 14-day partition + live observation in parallel. The
+  // SpotConditionsBlock pivots through the first ~7 days; the
+  // continuous forecast table below scrolls across the full 14.
   // Live-observation failure is non-fatal (returns null).
   const knmiKey = process.env.NEXT_PUBLIC_KNMI_API_KEY;
   const [spotWeek, liveObservation] = await Promise.all([
-    fetchSpotWeek(spot, 7),
+    fetchSpotWeek(spot, 14),
     fetchLiveObservation(spot, knmiKey),
   ]);
 
   const allHours: HourlyForecast[] = spotWeek.days.flatMap((d) => d.hours);
   const forecastError = spotWeek.days.length === 0 ? "No forecast data" : null;
-  const days = groupHoursByLocalDay(allHours).slice(0, 3);
   const todayKey = nlLocalDateKey(new Date());
 
-  // Once we know the three local-date keys, fetch tide events for each in parallel.
-  const tidesPerDay = await Promise.all(days.map((d) => fetchDailyTides(spot, d.dateKey)));
+  // Tide events for tide-sensitive spots — fetch the next 3 days only.
+  // Per-day tide overlays in the table are a future enhancement; for now
+  // we render the next few high/low events as a separate strip.
+  const tideDays = spotWeek.days.slice(0, 3).map((d) => d.dateKey);
+  const tidesPerDay = await Promise.all(
+    tideDays.map((dateKey) => fetchDailyTides(spot, dateKey)),
+  );
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
@@ -141,19 +137,14 @@ export default async function SpotDetailPage({
 
       {forecastError ? (
         <ErrorCard title="Forecast unavailable" message={forecastError} />
-      ) : days.length === 0 ? (
-        <p className="text-zinc-500">No forecast data available.</p>
       ) : (
-        <div className="space-y-10">
-          {days.map((day, i) => (
-            <DaySection
-              key={day.dateKey}
-              spot={spot}
-              day={day}
-              tides={tidesPerDay[i] ?? []}
-            />
-          ))}
-        </div>
+        <section className="mb-10">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Forecast — next {spotWeek.days.length} days
+          </h2>
+          <UpcomingTides days={tideDays} tidesPerDay={tidesPerDay} />
+          <WindguruDayTable spot={spot} hours={allHours} />
+        </section>
       )}
 
       <SpotSocial spot={spot} />
@@ -204,77 +195,54 @@ function msToKn(ms: number): string {
   return msToKnots(ms).toFixed(0);
 }
 
-function DaySection({
-  spot,
-  day,
-  tides,
+// Compact tide-events strip rendered above the forecast table for
+// tide-sensitive spots. Keeps the legacy per-day layout but stacks
+// only the few days we actually fetched (3) — matches the prior UX
+// without per-day verdict cards (those moved to SpotConditionsBlock).
+function UpcomingTides({
+  days,
+  tidesPerDay,
 }: {
-  spot: Spot;
-  day: DayGroup;
-  tides: TidePoint[];
+  days: string[];
+  tidesPerDay: TidePoint[][];
 }) {
-  const verdict = evaluateDay({ spot, hours: day.hours, thresholds: DEFAULT_THRESHOLDS });
-  const rideableCount = day.hours.filter((h) => isHourRideable(h, spot, DEFAULT_THRESHOLDS))
-    .length;
-
+  const hasAny = tidesPerDay.some((arr) => arr.length > 0);
+  if (!hasAny) return null;
   return (
-    <section>
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">{formatDayLabel(day.dateKey)}</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {rideableCount} rideable {rideableCount === 1 ? "hour" : "hours"}
-          </p>
-        </div>
-        <VerdictBadge verdict={verdict} />
-      </div>
-
-      {tides.length > 0 ? <TideRow tides={tides} /> : null}
-
-      <WindguruDayTable spot={spot} hours={day.hours} />
-    </section>
-  );
-}
-
-function TideRow({ tides }: { tides: TidePoint[] }) {
-  return (
-    <div className="mb-3 flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
-      {tides.map((t) => (
-        <span
-          key={t.at}
-          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 font-mono dark:border-zinc-800 dark:bg-zinc-950"
-        >
-          <span className={t.type === "high" ? "text-sky-600 dark:text-sky-400" : "text-amber-600 dark:text-amber-400"}>
-            {t.type === "high" ? "▲" : "▼"}
-          </span>
-          <span>{formatHourLabel(t.at)}</span>
-          <span className="text-zinc-400">
-            {t.heightCm >= 0 ? "+" : ""}
-            {t.heightCm} cm
-          </span>
-        </span>
-      ))}
+    <div className="mb-4 flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
+      {days.map((dateKey, i) => {
+        const tides = tidesPerDay[i] ?? [];
+        if (tides.length === 0) return null;
+        return (
+          <div key={dateKey} className="flex items-center gap-2">
+            <span className="font-mono text-[10px] uppercase text-zinc-400">
+              {dateKey.slice(8, 10)}/{dateKey.slice(5, 7)}
+            </span>
+            {tides.map((t) => (
+              <span
+                key={t.at}
+                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 font-mono dark:border-zinc-800 dark:bg-zinc-950"
+              >
+                <span
+                  className={
+                    t.type === "high"
+                      ? "text-sky-600 dark:text-sky-400"
+                      : "text-amber-600 dark:text-amber-400"
+                  }
+                >
+                  {t.type === "high" ? "▲" : "▼"}
+                </span>
+                <span>{formatHourLabel(t.at)}</span>
+                <span className="text-zinc-400">
+                  {t.heightCm >= 0 ? "+" : ""}
+                  {t.heightCm} cm
+                </span>
+              </span>
+            ))}
+          </div>
+        );
+      })}
     </div>
-  );
-}
-
-function VerdictBadge({ verdict }: { verdict: Verdict }) {
-  const styles: Record<typeof verdict.decision, string> = {
-    go: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-    marginal: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-    no_go: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  };
-  const labels: Record<typeof verdict.decision, string> = {
-    go: "GO",
-    marginal: "MAYBE",
-    no_go: "NO GO",
-  };
-  return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-bold tracking-wide ${styles[verdict.decision]}`}
-    >
-      {labels[verdict.decision]}
-    </span>
   );
 }
 

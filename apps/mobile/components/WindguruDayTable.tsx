@@ -14,22 +14,45 @@ type Props = {
   windowSize?: number;
 };
 
-const COL_WIDTH = 44;
+const COL_WIDTH = 56;
 const ROW_HEIGHT = 36;
+const DAY_HEADER_HEIGHT = 28;
+const TIME_HEADER_HEIGHT = 40;
 
-// Windguru-style pivoted table for mobile: rows are metrics (Time, Wind,
-// Gust, Dir, Temp, Rain, Ride), columns are 2-hour windows of the day.
-// Left legend column is fixed; right side is a horizontal ScrollView.
+// Windguru-style pivoted forecast for mobile. Single continuous table
+// across all fetched days (~14). The legend column on the left is
+// fixed (rendered outside the horizontal ScrollView) so it stays in
+// place as the user scrolls right through the week.
 export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
   const buckets = bucketHours(hours, spot, windowSize);
   if (buckets.length === 0) {
-    return <Text style={styles.empty}>No hourly data for this day.</Text>;
+    return <Text style={styles.empty}>No hourly data to show.</Text>;
+  }
+
+  // Group buckets by NL local date so each day's columns share a single
+  // header cell.
+  const days: { dateKey: string; buckets: HourBucket[] }[] = [];
+  let last = "";
+  for (const b of buckets) {
+    if (b.dateKey !== last) {
+      days.push({ dateKey: b.dateKey, buckets: [b] });
+      last = b.dateKey;
+    } else {
+      days[days.length - 1]!.buckets.push(b);
+    }
   }
 
   return (
     <View style={styles.outer}>
+      {/* Sticky legend column */}
       <View style={styles.legendCol}>
-        <LegendCell label="Time" />
+        {/* Day-header gutter (so legend and right-side day row line up) */}
+        <View style={[styles.legendCell, { height: DAY_HEADER_HEIGHT }]}>
+          <Text style={styles.legendText}>Day</Text>
+        </View>
+        <View style={[styles.legendCell, { height: TIME_HEADER_HEIGHT }]}>
+          <Text style={styles.legendText}>Time</Text>
+        </View>
         <LegendCell label="Wind kn" />
         <LegendCell label="Gust kn" />
         <LegendCell label="Dir" />
@@ -37,24 +60,55 @@ export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
         <LegendCell label="Rain" />
         <LegendCell label="Ride" />
       </View>
+
+      {/* Scrolling forecast columns */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: "row" }}>
-          {buckets.map((b) => (
-            <BucketColumn key={b.startTime} bucket={b} />
-          ))}
+        <View>
+          {/* Day header row */}
+          <View style={styles.dayHeaderRow}>
+            {days.map((d) => (
+              <View
+                key={d.dateKey}
+                style={[
+                  styles.dayHeaderCell,
+                  { width: COL_WIDTH * d.buckets.length },
+                ]}
+              >
+                <Text style={styles.dayHeaderText}>
+                  {formatDayHeader(d.dateKey)}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Time row + 6 metric rows in column-major form */}
+          <View style={{ flexDirection: "row" }}>
+            {buckets.map((b) => (
+              <BucketColumn key={b.startTime} bucket={b} windowSize={windowSize} />
+            ))}
+          </View>
         </View>
       </ScrollView>
     </View>
   );
 }
 
-function BucketColumn({ bucket }: { bucket: HourBucket }) {
+function BucketColumn({
+  bucket,
+  windowSize,
+}: {
+  bucket: HourBucket;
+  windowSize: number;
+}) {
   const windKn = msToKnots(bucket.windSpeedMs);
   const gustKn = msToKnots(bucket.gustMs);
   const cardinal = cardinalDirection(bucket.windDirectionDeg);
   return (
     <View style={styles.col}>
-      <CellTime hour={bucket.startLocalHour} />
+      <CellTime
+        startHour={bucket.startLocalHour}
+        endHour={(bucket.startLocalHour + windowSize) % 24}
+      />
       <CellWind kn={windKn} />
       <CellNum value={Math.round(gustKn)} muted />
       <CellDirection deg={bucket.windDirectionDeg} cardinal={cardinal} />
@@ -73,10 +127,18 @@ function LegendCell({ label }: { label: string }) {
   );
 }
 
-function CellTime({ hour }: { hour: number }) {
+function CellTime({
+  startHour,
+  endHour,
+}: {
+  startHour: number;
+  endHour: number;
+}) {
   return (
-    <View style={[styles.cell, styles.cellTime]}>
-      <Text style={styles.cellTimeText}>{pad2(hour)}</Text>
+    <View style={[styles.timeCell, { height: TIME_HEADER_HEIGHT }]}>
+      <Text style={styles.cellTimeText}>{pad2(startHour)}:00</Text>
+      <Text style={styles.cellTimeDash}>–</Text>
+      <Text style={styles.cellTimeText}>{pad2(endHour)}:00</Text>
     </View>
   );
 }
@@ -131,17 +193,13 @@ function CellRide({ rideable }: { rideable: boolean }) {
   return (
     <View style={styles.cell}>
       <View
-        style={[
-          styles.rideDot,
-          rideable ? styles.rideDotOn : styles.rideDotOff,
-        ]}
+        style={[styles.rideDot, rideable ? styles.rideDotOn : styles.rideDotOff]}
       />
     </View>
   );
 }
 
 function Arrow({ degrees }: { degrees: number }) {
-  // Wind direction is "comes FROM"; downwind is +180°.
   const downwind = (degrees + 180) % 360;
   return (
     <View style={{ transform: [{ rotate: `${downwind}deg` }] }}>
@@ -162,6 +220,19 @@ function windTint(kn: number): { bg: string; fg: string } {
 
 function pad2(n: number): string {
   return n.toString().padStart(2, "0");
+}
+
+const NL_WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function formatDayHeader(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  const localDate = new Date(
+    d.toLocaleString("en-US", { timeZone: "Europe/Amsterdam" }),
+  );
+  const weekday = NL_WEEKDAYS[localDate.getDay()] ?? "";
+  const day = parseInt(dateKey.slice(8, 10), 10);
+  const month = parseInt(dateKey.slice(5, 7), 10);
+  return `${weekday} (${day}/${month})`;
 }
 
 const styles = StyleSheet.create({
@@ -191,10 +262,35 @@ const styles = StyleSheet.create({
     color: "#71717a",
     textTransform: "uppercase",
   },
+  dayHeaderRow: {
+    flexDirection: "row",
+    height: DAY_HEADER_HEIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e4e4e7",
+    backgroundColor: "#fafafa",
+  },
+  dayHeaderCell: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderLeftWidth: 1,
+    borderLeftColor: "#e4e4e7",
+  },
+  dayHeaderText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#3f3f46",
+  },
   col: {
     width: COL_WIDTH,
     borderLeftWidth: 1,
     borderLeftColor: "#f4f4f5",
+  },
+  timeCell: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f4f4f5",
+    backgroundColor: "#fafafa",
   },
   cell: {
     height: ROW_HEIGHT,
@@ -203,12 +299,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f4f4f5",
   },
-  cellTime: { backgroundColor: "#fafafa" },
   cellTimeText: {
     fontSize: 10,
     fontVariant: ["tabular-nums"],
-    color: "#71717a",
+    color: "#52525b",
+    lineHeight: 12,
   },
+  cellTimeDash: { fontSize: 9, color: "#a1a1aa", lineHeight: 10 },
   cellWindText: {
     fontSize: 14,
     fontWeight: "700",

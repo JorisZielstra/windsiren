@@ -5,14 +5,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
 import {
   cardinalDirection,
-  evaluateDay,
-  DEFAULT_THRESHOLDS,
-  isHourRideable,
   msToKnots,
-  type HourlyForecast,
   type Spot,
   type TidePoint,
-  type Verdict,
 } from "@windsiren/shared";
 import {
   addFavorite,
@@ -22,9 +17,7 @@ import {
   fetchDailyTides,
   fetchLiveObservation,
   fetchSpotWeek,
-  formatDayLabel,
   formatHourLabel,
-  groupHoursByLocalDay,
   fetchHomeSpotIds,
   isHomeSpot,
   isSpotFavorited,
@@ -33,7 +26,6 @@ import {
   removeHomeSpot,
   SUGGESTED_HOME_SPOT_MAX,
   safeSectorPaths,
-  type DayGroup,
   type LiveObservation,
   type SpotWeek,
 } from "@windsiren/core";
@@ -47,7 +39,7 @@ type Loaded = {
   spot: Spot;
   spotWeek: SpotWeek;
   todayKey: string;
-  days: DayGroup[];
+  tideDays: string[];
   tidesPerDay: TidePoint[][];
   live: LiveObservation | null;
 };
@@ -143,18 +135,19 @@ export default function SpotDetailScreen() {
 
       try {
         const [spotWeek, live] = await Promise.all([
-          fetchSpotWeek(spot, 7),
+          fetchSpotWeek(spot, 14),
           fetchLiveObservation(spot, process.env.EXPO_PUBLIC_KNMI_API_KEY),
         ]);
         if (cancelled) return;
-        const allHours = spotWeek.days.flatMap((d) => d.hours);
-        const days = groupHoursByLocalDay(allHours).slice(0, 3);
+        // Tide events for the next 3 days (rendered as a compact strip
+        // above the 14-day forecast table).
+        const tideDays = spotWeek.days.slice(0, 3).map((d) => d.dateKey);
         const tidesPerDay = await Promise.all(
-          days.map((d) => fetchDailyTides(spot, d.dateKey)),
+          tideDays.map((dateKey) => fetchDailyTides(spot, dateKey)),
         );
         if (cancelled) return;
         const todayKey = nlLocalDateKey(new Date());
-        setLoaded({ spot, spotWeek, todayKey, days, tidesPerDay, live });
+        setLoaded({ spot, spotWeek, todayKey, tideDays, tidesPerDay, live });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -189,14 +182,21 @@ export default function SpotDetailScreen() {
               />
             </View>
           ) : null}
-          {loaded.days.map((day, i) => (
-            <DaySection
-              key={day.dateKey}
-              spot={loaded.spot}
-              day={day}
-              tides={loaded.tidesPerDay[i] ?? []}
-            />
-          ))}
+          {loaded.spotWeek.days.length > 0 ? (
+            <View style={styles.forecastSection}>
+              <Text style={styles.sectionLabel}>
+                Forecast — next {loaded.spotWeek.days.length} days
+              </Text>
+              <UpcomingTides
+                days={loaded.tideDays}
+                tidesPerDay={loaded.tidesPerDay}
+              />
+              <WindguruDayTable
+                spot={loaded.spot}
+                hours={loaded.spotWeek.days.flatMap((d) => d.hours)}
+              />
+            </View>
+          ) : null}
           <SpotSocial spot={loaded.spot} />
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -437,69 +437,47 @@ function LiveStat({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function DaySection({
-  spot,
-  day,
-  tides,
+// Compact tide-events strip rendered above the forecast table for
+// tide-sensitive spots. We keep the legacy chip styling but stack
+// only the few days we actually fetched (next 3) — per-day verdict
+// cards moved into SpotConditionsBlock.
+function UpcomingTides({
+  days,
+  tidesPerDay,
 }: {
-  spot: Spot;
-  day: DayGroup;
-  tides: TidePoint[];
+  days: string[];
+  tidesPerDay: TidePoint[][];
 }) {
-  const verdict = evaluateDay({ spot, hours: day.hours, thresholds: DEFAULT_THRESHOLDS });
-  const rideableCount = day.hours.filter((h) =>
-    isHourRideable(h, spot, DEFAULT_THRESHOLDS),
-  ).length;
-
+  const hasAny = tidesPerDay.some((arr) => arr.length > 0);
+  if (!hasAny) return null;
   return (
-    <View style={styles.daySection}>
-      <View style={styles.dayHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.dayTitle}>{formatDayLabel(day.dateKey)}</Text>
-          <Text style={styles.daySub}>
-            {rideableCount} rideable {rideableCount === 1 ? "hour" : "hours"}
-          </Text>
-        </View>
-        <VerdictPill verdict={verdict} />
-      </View>
-
-      {tides.length > 0 ? <TideRow tides={tides} /> : null}
-
-      <WindguruDayTable spot={spot} hours={day.hours} />
-    </View>
-  );
-}
-
-function TideRow({ tides }: { tides: TidePoint[] }) {
-  return (
-    <View style={styles.tideRow}>
-      {tides.map((t) => (
-        <View key={t.at} style={styles.tideChip}>
-          <Text style={t.type === "high" ? styles.tideArrowHigh : styles.tideArrowLow}>
-            {t.type === "high" ? "▲" : "▼"}
-          </Text>
-          <Text style={styles.tideTime}>{formatHourLabel(t.at)}</Text>
-          <Text style={styles.tideHeight}>
-            {t.heightCm >= 0 ? "+" : ""}
-            {t.heightCm} cm
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function VerdictPill({ verdict }: { verdict: Verdict }) {
-  const palette = {
-    go: { bg: "#dcfce7", fg: "#065f46" },
-    marginal: { bg: "#fef3c7", fg: "#92400e" },
-    no_go: { bg: "#f4f4f5", fg: "#52525b" },
-  } as const;
-  const labels = { go: "GO", marginal: "MAYBE", no_go: "NO GO" } as const;
-  const p = palette[verdict.decision];
-  return (
-    <View style={[styles.verdictPill, { backgroundColor: p.bg }]}>
-      <Text style={[styles.verdictText, { color: p.fg }]}>{labels[verdict.decision]}</Text>
+    <View style={{ marginBottom: 12, gap: 8 }}>
+      {days.map((dateKey, i) => {
+        const tides = tidesPerDay[i] ?? [];
+        if (tides.length === 0) return null;
+        return (
+          <View
+            key={dateKey}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+          >
+            <Text style={styles.tideDateLabel}>
+              {dateKey.slice(8, 10)}/{dateKey.slice(5, 7)}
+            </Text>
+            {tides.map((t) => (
+              <View key={t.at} style={styles.tideChip}>
+                <Text style={t.type === "high" ? styles.tideArrowHigh : styles.tideArrowLow}>
+                  {t.type === "high" ? "▲" : "▼"}
+                </Text>
+                <Text style={styles.tideTime}>{formatHourLabel(t.at)}</Text>
+                <Text style={styles.tideHeight}>
+                  {t.heightCm >= 0 ? "+" : ""}
+                  {t.heightCm} cm
+                </Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -592,11 +570,22 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   tideBadgeText: { fontSize: 10, color: "#1e40af", fontWeight: "600" },
-  daySection: { marginBottom: 24 },
-  dayHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  dayTitle: { fontSize: 16, fontWeight: "600" },
-  daySub: { fontSize: 11, color: "#6b7280", marginTop: 2 },
-  tideRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  forecastSection: { marginVertical: 16 },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: "#6b7280",
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+  tideDateLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#a1a1aa",
+    letterSpacing: 0.4,
+    fontVariant: ["tabular-nums"],
+  },
   tideChip: {
     flexDirection: "row",
     alignItems: "center",

@@ -12,119 +12,172 @@ type Props = {
   windowSize?: number;
 };
 
-const COL_WIDTH = 44; // px — narrow enough to fit a full day on phones
+const COL_WIDTH = 56; // px — wide enough for "08:00 – 10:00" wrapped on 2 lines
 
-// Windguru-style pivoted table: rows are metrics (Time, Wind, Gust, Dir,
-// Temp, Rain, Ride), columns are 2-hour windows of the day. Left column
-// stays sticky as the right side scrolls horizontally.
+// Windguru-style pivoted forecast table. Rows are metrics (Wind kn,
+// Gust kn, Dir, Air °C, Rain, Ride). Columns are 2-hour windows of
+// the day, laid out in a single continuous strip across the entire
+// fetched window (today + ~13 future days = up to 14 days). The
+// first column is sticky so the row labels stay visible as the user
+// scrolls right through the week.
 export function WindguruDayTable({ spot, hours, windowSize = 2 }: Props) {
   const buckets = bucketHours(hours, spot, windowSize);
   if (buckets.length === 0) {
-    return (
-      <p className="text-xs text-zinc-500">No hourly data for this day.</p>
-    );
+    return <p className="text-xs text-zinc-500">No hourly data to show.</p>;
+  }
+
+  // Group buckets by their NL local date so the day header can colspan
+  // each day's columns. Order is preserved (oldest → newest).
+  const days: { dateKey: string; buckets: HourBucket[] }[] = [];
+  let last = "";
+  for (const b of buckets) {
+    if (b.dateKey !== last) {
+      days.push({ dateKey: b.dateKey, buckets: [b] });
+      last = b.dateKey;
+    } else {
+      days[days.length - 1]!.buckets.push(b);
+    }
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
-      <div className="flex">
-        {/* Sticky legend column */}
-        <div className="shrink-0 border-r border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-          <LegendCell label="Time" />
-          <LegendCell label="Wind kn" />
-          <LegendCell label="Gust kn" />
-          <LegendCell label="Dir" />
-          <LegendCell label="Air °C" />
-          <LegendCell label="Rain" />
-          <LegendCell label="Ride" />
-        </div>
-
-        {/* Scrolling forecast columns */}
-        <div className="flex-1 overflow-x-auto">
-          <div
-            className="grid grid-flow-col"
-            style={{ gridAutoColumns: `${COL_WIDTH}px` }}
-          >
-            {buckets.map((b) => (
-              <BucketColumn key={b.startTime} bucket={b} />
+    <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+      <table className="border-separate border-spacing-0 text-sm">
+        <thead>
+          {/* Day row — one cell per day, spans that day's bucket columns */}
+          <tr>
+            <th className={`${stickyLeft} ${headerCell} align-bottom`}>Day</th>
+            {days.map((d) => (
+              <th
+                key={d.dateKey}
+                colSpan={d.buckets.length}
+                className="border-b border-l border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                {formatDayHeader(d.dateKey)}
+              </th>
             ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          </tr>
 
-// Each column is a single bucket; rows align to the legend rows by
-// matching pixel heights.
-function BucketColumn({ bucket }: { bucket: HourBucket }) {
-  const windKn = msToKnots(bucket.windSpeedMs);
-  const gustKn = msToKnots(bucket.gustMs);
-  const cardinal = cardinalDirection(bucket.windDirectionDeg);
-  return (
-    <div className="border-l border-zinc-100 first:border-l-0 dark:border-zinc-900">
-      <CellTime hour={bucket.startLocalHour} />
-      <CellWind kn={windKn} />
-      <CellNum value={Math.round(gustKn)} className="text-zinc-500" />
-      <CellDirection deg={bucket.windDirectionDeg} cardinal={cardinal} />
-      <CellNum value={Math.round(bucket.airTempC)} />
-      <CellRain mm={bucket.precipitationMm} />
-      <CellRide rideable={bucket.rideable} />
+          {/* Time row — one cell per bucket */}
+          <tr>
+            <th className={`${stickyLeft} ${headerCell}`}>Time</th>
+            {buckets.map((b) => (
+              <th
+                key={b.startTime}
+                style={{ width: COL_WIDTH, minWidth: COL_WIDTH }}
+                className="border-b border-zinc-200 bg-zinc-50 px-1 py-1 text-center font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900"
+              >
+                <div>{pad2(b.startLocalHour)}:00</div>
+                <div className="text-zinc-400">–</div>
+                <div>{pad2((b.startLocalHour + windowSize) % 24)}:00</div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          <MetricRow label="Wind kn">
+            {buckets.map((b) => (
+              <CellWind key={b.startTime} kn={msToKnots(b.windSpeedMs)} />
+            ))}
+          </MetricRow>
+
+          <MetricRow label="Gust kn">
+            {buckets.map((b) => (
+              <CellNum
+                key={b.startTime}
+                value={Math.round(msToKnots(b.gustMs))}
+                muted
+              />
+            ))}
+          </MetricRow>
+
+          <MetricRow label="Dir">
+            {buckets.map((b) => (
+              <CellDirection
+                key={b.startTime}
+                deg={b.windDirectionDeg}
+                cardinal={cardinalDirection(b.windDirectionDeg)}
+              />
+            ))}
+          </MetricRow>
+
+          <MetricRow label="Air °C">
+            {buckets.map((b) => (
+              <CellNum key={b.startTime} value={Math.round(b.airTempC)} />
+            ))}
+          </MetricRow>
+
+          <MetricRow label="Rain">
+            {buckets.map((b) => (
+              <CellRain key={b.startTime} mm={b.precipitationMm} />
+            ))}
+          </MetricRow>
+
+          <MetricRow label="Ride">
+            {buckets.map((b) => (
+              <CellRide key={b.startTime} rideable={b.rideable} />
+            ))}
+          </MetricRow>
+        </tbody>
+      </table>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Cells
+// Rows + cells
 // ---------------------------------------------------------------------------
 
-const ROW_H = "h-9"; // keeps every cell + its legend label vertically aligned
+const stickyLeft =
+  "sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800";
+const headerCell =
+  "px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500";
 
-function LegendCell({ label }: { label: string }) {
+function MetricRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div
-      className={`flex ${ROW_H} items-center px-3 font-medium text-[10px] border-b border-zinc-100 last:border-b-0 dark:border-zinc-900`}
-    >
-      {label}
-    </div>
-  );
-}
-
-function CellTime({ hour }: { hour: number }) {
-  return (
-    <div
-      className={`flex ${ROW_H} items-center justify-center border-b border-zinc-100 bg-zinc-50 font-mono text-[10px] text-zinc-500 dark:border-zinc-900 dark:bg-zinc-900`}
-    >
-      {pad2(hour)}
-    </div>
+    <tr>
+      <th
+        className={`${stickyLeft} px-3 text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500 border-b border-zinc-100 dark:border-zinc-900`}
+      >
+        {label}
+      </th>
+      {children}
+    </tr>
   );
 }
 
 function CellWind({ kn }: { kn: number }) {
-  const rounded = Math.round(kn);
   const tint = windTint(kn);
   return (
-    <div
-      className={`flex ${ROW_H} items-center justify-center border-b border-zinc-100 font-mono text-sm font-semibold dark:border-zinc-900 ${tint}`}
+    <td
+      className={`border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-sm font-semibold dark:border-zinc-900 ${tint}`}
     >
-      {rounded}
-    </div>
+      {Math.round(kn)}
+    </td>
   );
 }
 
 function CellNum({
   value,
-  className = "",
+  muted = false,
 }: {
   value: number;
-  className?: string;
+  muted?: boolean;
 }) {
   return (
-    <div
-      className={`flex ${ROW_H} items-center justify-center border-b border-zinc-100 font-mono text-sm dark:border-zinc-900 ${className}`}
+    <td
+      className={`border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-sm dark:border-zinc-900 ${
+        muted ? "text-zinc-500" : ""
+      }`}
     >
       {value}
-    </div>
+    </td>
   );
 }
 
@@ -136,50 +189,52 @@ function CellDirection({
   cardinal: string;
 }) {
   return (
-    <div
-      className={`flex ${ROW_H} flex-col items-center justify-center border-b border-zinc-100 dark:border-zinc-900`}
+    <td
       title={`${cardinal} (${Math.round(deg)}°)`}
+      className="border-b border-zinc-100 px-1 py-1 dark:border-zinc-900"
     >
-      <Arrow degrees={deg} />
-      <span className="font-mono text-[9px] text-zinc-500">{cardinal}</span>
-    </div>
+      <div className="flex flex-col items-center justify-center gap-0.5">
+        <Arrow degrees={deg} />
+        <span className="font-mono text-[9px] text-zinc-500">{cardinal}</span>
+      </div>
+    </td>
   );
 }
 
 function CellRain({ mm }: { mm: number }) {
   if (mm <= 0) {
     return (
-      <div
-        className={`flex ${ROW_H} items-center justify-center border-b border-zinc-100 text-xs text-zinc-300 dark:border-zinc-900 dark:text-zinc-700`}
-      >
+      <td className="border-b border-zinc-100 px-1 py-1.5 text-center text-xs text-zinc-300 dark:border-zinc-900 dark:text-zinc-700">
         —
-      </div>
+      </td>
     );
   }
-  // Light tint when noticeable rain is forecast (>0.5 mm aggregated).
-  const tint = mm > 0.5 ? "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300" : "";
+  const tint =
+    mm > 0.5
+      ? "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+      : "";
   return (
-    <div
-      className={`flex ${ROW_H} items-center justify-center border-b border-zinc-100 font-mono text-xs dark:border-zinc-900 ${tint}`}
+    <td
+      className={`border-b border-zinc-100 px-1 py-1.5 text-center font-mono text-xs dark:border-zinc-900 ${tint}`}
     >
       {mm.toFixed(1)}
-    </div>
+    </td>
   );
 }
 
 function CellRide({ rideable }: { rideable: boolean }) {
   return (
-    <div
-      className={`flex ${ROW_H} items-center justify-center border-b last:border-b-0 border-zinc-100 dark:border-zinc-900`}
-    >
-      <span
-        className={[
-          "inline-block h-2.5 w-2.5 rounded-full",
-          rideable ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-700",
-        ].join(" ")}
-        aria-label={rideable ? "rideable" : "not rideable"}
-      />
-    </div>
+    <td className="border-b border-zinc-100 px-1 py-1.5 dark:border-zinc-900">
+      <div className="flex items-center justify-center">
+        <span
+          className={[
+            "inline-block h-2.5 w-2.5 rounded-full",
+            rideable ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-700",
+          ].join(" ")}
+          aria-label={rideable ? "rideable" : "not rideable"}
+        />
+      </div>
+    </td>
   );
 }
 
@@ -187,10 +242,9 @@ function CellRide({ rideable }: { rideable: boolean }) {
 // Visual helpers
 // ---------------------------------------------------------------------------
 
-// Wind arrow points downwind (direction the wind is going TO). Matches
-// Windguru convention. SVG so it scales cleanly with text-size.
 function Arrow({ degrees }: { degrees: number }) {
-  // Wind direction is "wind comes FROM this bearing"; downwind is +180°.
+  // Wind direction = "comes FROM"; downwind arrow points where the wind
+  // is going.
   const downwind = (degrees + 180) % 360;
   return (
     <svg
@@ -206,9 +260,6 @@ function Arrow({ degrees }: { degrees: number }) {
   );
 }
 
-// Tailwind class for the wind cell background, banded by knots. Matches
-// the kiteable range (~15–25 kn) being green; weaker/stronger drift to
-// dim/warning colors.
 function windTint(kn: number): string {
   if (kn < 8) return "bg-zinc-50 text-zinc-400 dark:bg-zinc-950 dark:text-zinc-600";
   if (kn < 15) return "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-300";
@@ -219,4 +270,19 @@ function windTint(kn: number): string {
 
 function pad2(n: number): string {
   return n.toString().padStart(2, "0");
+}
+
+const NL_WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+// "Mo (27/4)" — pin to UTC noon so the day-of-week formatter doesn't
+// roll across the NL TZ boundary at midnight.
+function formatDayHeader(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00Z`);
+  const localDate = new Date(
+    d.toLocaleString("en-US", { timeZone: "Europe/Amsterdam" }),
+  );
+  const weekday = NL_WEEKDAYS[localDate.getDay()] ?? "";
+  const day = parseInt(dateKey.slice(8, 10), 10);
+  const month = parseInt(dateKey.slice(5, 7), 10);
+  return `${weekday} (${day}/${month})`;
 }
