@@ -1,26 +1,213 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* North Sea palette — direction A from the design refactor.
+   Anchor: warm paper background + deep ink + a sea-foam GO accent +
+   a single deep-ocean brand. All tokens live here so a future palette
+   tweak is a one-file edit instead of 60-file grep-replace.
+   Mobile mirrors these in apps/mobile/lib/theme.ts.
+
+   Architecture decision: the FOUC script in app/layout.tsx ALWAYS
+   resolves to either `theme-light` or `theme-dark` on <html> (auto
+   mode just means "no localStorage entry → consult prefers-color-
+   scheme at script time"). So CSS only needs two states, no @media
+   gymnastics, and Tailwind's `dark:` variant follows the same class —
+   eliminating the double-system bug where legacy `dark:bg-zinc-950`
+   classes kept firing off the OS even when the picker forced light. */
+
+/* Override Tailwind v4's default `dark:` variant so it honors our
+   class-based theming. Every legacy `dark:bg-zinc-950` etc. now fires
+   when, and only when, an ancestor has `theme-dark`. */
+@custom-variant dark (&:where(.theme-dark, .theme-dark *));
+
+/* Base + light. Both selectors carry the same values — :root gives a
+   sensible no-JS default; .theme-light wins explicitly when the FOUC
+   script applies it. */
+:root,
+:root.theme-light {
+  --ws-paper: #faf8f2;             /* page background — warm off-white */
+  --ws-paper-2: #ffffff;           /* card surface — floats above paper */
+  --ws-paper-sunk: #f3eee0;        /* recessed surface, sticky header bg */
+
+  --ws-ink: #0b2e3f;
+  --ws-ink-2: #324a59;
+  --ws-ink-mute: #6c7d88;
+  --ws-ink-faint: #a7b2b9;
+
+  --ws-brand: #0b3d59;
+  --ws-brand-strong: #062a3e;
+  --ws-brand-soft: #d6e8f2;
+  --ws-brand-link: #1b6b96;
+
+  --ws-go: #0fb89a;
+  --ws-go-strong: #0a8a73;
+  --ws-go-soft: #d5f2ec;
+  --ws-go-ink: #044a3e;
+
+  --ws-maybe: #d88b3d;
+  --ws-maybe-soft: #fbe9d2;
+  --ws-maybe-ink: #5b3a18;
+
+  --ws-no-go: #7e8a91;
+  --ws-no-go-soft: #e7eaec;
+
+  --ws-hazard: #c0473f;
+  --ws-hazard-soft: #f6dcd9;
+
+  --ws-border: #e8e2d2;
+  --ws-border-strong: #c9c3b5;
+
+  --background: var(--ws-paper);
+  --foreground: var(--ws-ink);
 }
 
+:root.theme-dark {
+  --ws-paper: #0b1a22;
+  --ws-paper-2: #0f232e;
+  --ws-paper-sunk: #08151c;
+
+  --ws-ink: #e8e2d2;
+  --ws-ink-2: #b6c2c9;
+  --ws-ink-mute: #7e8d97;
+  --ws-ink-faint: #475862;
+
+  --ws-brand: #5fb7dd;
+  --ws-brand-strong: #8acef0;
+  --ws-brand-soft: #143a4f;
+  --ws-brand-link: #5fb7dd;
+
+  --ws-go: #5fd1c4;
+  --ws-go-strong: #7ee0d4;
+  --ws-go-soft: #0e3d36;
+  --ws-go-ink: #d5f2ec;
+
+  --ws-maybe: #e6a062;
+  --ws-maybe-soft: #3d2a16;
+  --ws-maybe-ink: #fbe9d2;
+
+  --ws-no-go: #6c7780;
+  --ws-no-go-soft: #1a242b;
+
+  --ws-hazard: #d96f67;
+  --ws-hazard-soft: #3a1816;
+
+  --ws-border: #1f2c34;
+  --ws-border-strong: #2d3d47;
+
+  --background: var(--ws-paper);
+  --foreground: var(--ws-ink);
+}
+
+/* Tailwind v4 token registration — generates `bg-paper`, `text-ink`,
+   `border-border-strong`, etc. as utilities. */
 @theme inline {
+  --color-paper: var(--ws-paper);
+  --color-paper-2: var(--ws-paper-2);
+  --color-paper-sunk: var(--ws-paper-sunk);
+
+  --color-ink: var(--ws-ink);
+  --color-ink-2: var(--ws-ink-2);
+  --color-ink-mute: var(--ws-ink-mute);
+  --color-ink-faint: var(--ws-ink-faint);
+
+  --color-brand: var(--ws-brand);
+  --color-brand-strong: var(--ws-brand-strong);
+  --color-brand-soft: var(--ws-brand-soft);
+  --color-brand-link: var(--ws-brand-link);
+
+  --color-go: var(--ws-go);
+  --color-go-strong: var(--ws-go-strong);
+  --color-go-soft: var(--ws-go-soft);
+  --color-go-ink: var(--ws-go-ink);
+
+  --color-maybe: var(--ws-maybe);
+  --color-maybe-soft: var(--ws-maybe-soft);
+  --color-maybe-ink: var(--ws-maybe-ink);
+
+  --color-no-go: var(--ws-no-go);
+  --color-no-go-soft: var(--ws-no-go-soft);
+
+  --color-hazard: var(--ws-hazard);
+  --color-hazard-soft: var(--ws-hazard-soft);
+
+  --color-border: var(--ws-border);
+  --color-border-strong: var(--ws-border-strong);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-feature-settings: "ss01", "cv01", "cv11";
+}
+
+/* Display headlines — tighter tracking + heavier weight without loading
+   a separate font. Used on hero numbers and verdict pills. */
+.headline {
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  font-feature-settings: "ss01", "cv01", "cv11", "tnum";
+}
+
+/* Subtle paper grain on hero cards — gives the dashboard a hand-crafted
+   feel without loading an image. Pure CSS, ~3 KB at runtime. */
+.paper-grain {
+  background-image:
+    radial-gradient(circle at 25% 35%, rgba(11, 46, 63, 0.025) 1px, transparent 1.5px),
+    radial-gradient(circle at 75% 65%, rgba(11, 46, 63, 0.018) 1px, transparent 1.5px);
+  background-size: 7px 7px, 11px 11px;
+}
+
+/* Verdict utility classes — used everywhere so the GO/MAYBE/NO_GO
+   colors are consistent without per-component hex literals. */
+.verdict-go { background: var(--ws-go-soft); color: var(--ws-go-ink); }
+.verdict-maybe { background: var(--ws-maybe-soft); color: var(--ws-maybe-ink); }
+.verdict-no-go { background: var(--ws-no-go-soft); color: var(--ws-ink-2); }
+
+/* Map skin — warms CartoDB Positron's neutral gray land toward the
+   warm-paper palette and cools its water slightly toward brand-soft.
+   Scoped to the base layer so the labels overlay and the marker pane
+   stay untouched (otherwise the GO/MAYBE/NO_GO pins would shift hue). */
+.ws-map-base {
+  filter: sepia(0.18) saturate(0.85) hue-rotate(-8deg) brightness(1.02);
+}
+.ws-map-base--dark {
+  /* Carto dark tiles are already moody; just nudge them toward the
+     deep-ocean ink instead of the default near-black. */
+  filter: saturate(0.85) hue-rotate(8deg) brightness(0.95);
+}
+
+/* Soften label opacity so place names anchor without shouting over
+   the verdict pins. */
+.ws-map-labels {
+  opacity: 0.7;
+}
+
+/* Leaflet's default attribution box is loud (white slab). Match the
+   paper palette so it sits flush with the rest of the page. */
+.leaflet-container .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--ws-paper-2) 90%, transparent);
+  color: var(--ws-ink-mute);
+  font-family: var(--font-geist-sans);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-top-left-radius: 6px;
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--ws-brand-link);
+}
+
+/* Zoom control — same paper feel as the rest of the chrome. */
+.leaflet-container .leaflet-bar a {
+  background: var(--ws-paper-2);
+  color: var(--ws-ink);
+  border-color: var(--ws-border);
+}
+.leaflet-container .leaflet-bar a:hover {
+  background: var(--ws-paper-sunk);
 }

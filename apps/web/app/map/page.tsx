@@ -1,5 +1,11 @@
 import { supabase } from "@/lib/supabase";
-import { dbRowToSpot, fetchTodayVerdict } from "@windsiren/core";
+import {
+  dbRowToSpot,
+  fetchTodayVerdict,
+  getUserPrefs,
+  prefsToThresholds,
+} from "@windsiren/core";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import Link from "next/link";
 import { MapClient } from "./MapClient";
 
@@ -20,8 +26,20 @@ export default async function MapPage() {
     );
   }
 
+  // Match the dashboard verdicts: same thresholds → same GO/MAYBE/NO_GO
+  // bucketing, so a spot the user sees as GO on the dashboard renders
+  // green here too instead of falling back to default amber.
+  const authed = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authed.auth.getUser();
+  const userPrefs = await getUserPrefs(authed, user?.id ?? null);
+  const userThresholds = prefsToThresholds(userPrefs);
+
   const spots = (rows ?? []).map(dbRowToSpot);
-  const withVerdicts = await Promise.all(spots.map(fetchTodayVerdict));
+  const withVerdicts = await Promise.all(
+    spots.map((s) => fetchTodayVerdict(s, userThresholds)),
+  );
 
   const mapItems = withVerdicts.map(({ spot, verdict }) => ({
     id: spot.id,

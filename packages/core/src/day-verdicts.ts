@@ -4,6 +4,7 @@ import {
   DEFAULT_THRESHOLDS,
   type HourlyForecast,
   type Spot,
+  type ThresholdProfile,
   type Verdict,
 } from "@windsiren/shared";
 
@@ -27,12 +28,17 @@ const forecaster = new OpenMeteoForecastSource();
 // decision engine that `fetchTodayVerdict` uses, so the headline scoring
 // is consistent across "today" and "this week".
 //
-// Returns null verdicts on fetch failure (per-day fallback) — callers
-// render "no data" gracefully.
-export async function fetchSpotWeek(spot: Spot, days = 7): Promise<SpotWeek> {
+// `thresholds` defaults to the shared profile; pass user prefs (via
+// `prefsToThresholds(getUserPrefs(...))`) to personalize verdicts per
+// signed-in viewer.
+export async function fetchSpotWeek(
+  spot: Spot,
+  days = 7,
+  thresholds: ThresholdProfile = DEFAULT_THRESHOLDS,
+): Promise<SpotWeek> {
   try {
     const hours = await forecaster.fetchHourly(spot.lat, spot.lng, days);
-    return { spot, days: partitionByDay(spot, hours) };
+    return { spot, days: partitionByDay(spot, hours, thresholds) };
   } catch {
     return { spot, days: [] };
   }
@@ -41,7 +47,11 @@ export async function fetchSpotWeek(spot: Spot, days = 7): Promise<SpotWeek> {
 // Pure: partition raw hourly forecasts into per-NL-day groups, run the
 // decision engine on each. Exposed separately so tests don't need a
 // network stub and so callers can pass alternate hours arrays.
-export function partitionByDay(spot: Spot, hours: HourlyForecast[]): DayVerdict[] {
+export function partitionByDay(
+  spot: Spot,
+  hours: HourlyForecast[],
+  thresholds: ThresholdProfile = DEFAULT_THRESHOLDS,
+): DayVerdict[] {
   if (hours.length === 0) return [];
 
   // Group hours by their NL local date.
@@ -63,7 +73,7 @@ export function partitionByDay(spot: Spot, hours: HourlyForecast[]): DayVerdict[
     const verdict = evaluateDay({
       spot,
       hours: dayHours,
-      thresholds: DEFAULT_THRESHOLDS,
+      thresholds,
     });
     return { dateKey, verdict, hours: dayHours };
   });

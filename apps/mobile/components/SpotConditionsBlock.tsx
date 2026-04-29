@@ -1,7 +1,14 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { type SpotWeek, type SpotWithVerdict } from "@windsiren/core";
-import { addDaysToKey, countRideable, mondayOfDate, weekDates } from "./dashboard-utils";
+import { msToKnots } from "@windsiren/shared";
+import {
+  addDaysToKey,
+  countRideable,
+  daylightHours,
+  mondayOfDate,
+  weekDates,
+} from "./dashboard-utils";
 import {
   AirTempTile,
   DaylightTile,
@@ -11,14 +18,17 @@ import {
   WindTile,
 } from "./DayTiles";
 import { TileModal, type TileKey } from "./TileModal";
-import { WeekStrip } from "./WeekStrip";
+import { WeekStrip, type WeekScoreEntry } from "./WeekStrip";
 
 type Props = {
   spotWeek: SpotWeek;
   todayKey: string;
+  // When true, the inner "Conditions for X" header is hidden — useful when
+  // an outer CollapsibleSection has already taken over the title bar.
+  headless?: boolean;
 };
 
-export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
+export function SpotConditionsBlock({ spotWeek, todayKey, headless = false }: Props) {
   const dateKeys = useMemo(
     () => spotWeek.days.map((d) => d.dateKey).sort(),
     [spotWeek],
@@ -40,10 +50,7 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
   const dayItems = useMemo(() => [dayItem], [dayItem]);
 
   const weekScores = useMemo(() => {
-    const out = new Map<
-      string,
-      { score: number; goCount: number; total: number }
-    >();
+    const out = new Map<string, WeekScoreEntry>();
     for (const day of spotWeek.days) {
       const rideable = countRideable({
         spot: spotWeek.spot,
@@ -51,25 +58,38 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
         hours: day.hours,
       });
       const score = Math.round((Math.min(13, rideable) / 13) * 100);
+      const daylight = daylightHours(day.hours);
+      const avgWindKn =
+        daylight.length > 0
+          ? Math.round(
+              msToKnots(
+                daylight.reduce((s, h) => s + h.windSpeedMs, 0) /
+                  daylight.length,
+              ),
+            )
+          : null;
       out.set(day.dateKey, {
         score,
         goCount: rideable >= 3 ? 1 : 0,
         total: 1,
+        avgWindKn,
       });
     }
     return out;
   }, [spotWeek]);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <Text style={styles.heading}>
-          Conditions for {spotWeek.spot.name}
-        </Text>
-        <Text style={styles.subheading}>
-          Tap a day to pivot · tap a tile for hourly chart
-        </Text>
-      </View>
+    <View style={[styles.card, headless && styles.cardFlush]}>
+      {headless ? null : (
+        <View style={styles.header}>
+          <Text style={styles.heading}>
+            Conditions for {spotWeek.spot.name}
+          </Text>
+          <Text style={styles.subheading}>
+            Tap a day to pivot · tap a tile for hourly chart
+          </Text>
+        </View>
+      )}
 
       <WeekStrip
         visibleDates={weekDates(mondayOfDate(selectedDate))}
@@ -99,7 +119,7 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
       />
 
       <View style={styles.tileGrid}>
-        <VerdictTile item={dayItem} />
+        <VerdictTile item={dayItem} onPress={() => setActiveTile("verdict")} />
         <WindTile item={dayItem} onPress={() => setActiveTile("wind")} />
         <AirTempTile
           item={dayItem}
@@ -112,7 +132,11 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
           showSpotName={false}
           onPress={() => setActiveTile("peakWindow")}
         />
-        <DaylightTile item={dayItem} selectedDate={selectedDate} />
+        <DaylightTile
+          item={dayItem}
+          selectedDate={selectedDate}
+          onPress={() => setActiveTile("daylight")}
+        />
         <TrendTile
           item={dayItem}
           showSpotName={false}
@@ -133,7 +157,13 @@ export function SpotConditionsBlock({ spotWeek, todayKey }: Props) {
   );
 }
 
-function VerdictTile({ item }: { item: SpotWithVerdict }) {
+function VerdictTile({
+  item,
+  onPress,
+}: {
+  item: SpotWithVerdict;
+  onPress?: () => void;
+}) {
   const decision = item.verdict?.decision ?? null;
   const rideable = countRideable(item);
   const label =
@@ -154,6 +184,7 @@ function VerdictTile({ item }: { item: SpotWithVerdict }) {
     <Tile
       label="VERDICT"
       sub={`${rideable} rideable hour${rideable === 1 ? "" : "s"}`}
+      onPress={onPress}
     >
       <Text style={[styles.verdictText, accentStyle]}>{label}</Text>
     </Tile>
@@ -167,6 +198,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     overflow: "hidden",
+  },
+  cardFlush: {
+    borderWidth: 0,
+    borderRadius: 0,
   },
   header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
   heading: {

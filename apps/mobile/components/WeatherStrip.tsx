@@ -3,16 +3,20 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   fetchTodayVerdict,
+  getPublicProfile,
   pickHomeSpot,
+  type PublicProfile,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import { cardinalDirection, msToKnots } from "@windsiren/shared";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
+import { Avatar } from "./Avatar";
 
 export function WeatherStrip() {
   const { user, loading } = useAuth();
   const [data, setData] = useState<SpotWithVerdict | null>(null);
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -31,35 +35,65 @@ export function WeatherStrip() {
     };
   }, [loading, user]);
 
-  if (!data) return null;
+  useEffect(() => {
+    if (loading || !user) {
+      setProfile(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const p = await getPublicProfile(supabase, user.id);
+      if (!cancelled) setProfile(p);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user]);
 
-  const peak = pickPeak(data.hours);
-  const decision = data.verdict?.decision;
+  if (!data && !user) return null;
+
+  const peak = data ? pickPeak(data.hours) : null;
+  const decision = data?.verdict?.decision;
   const dotColor = verdictColor(decision);
   const label = decisionLabel(decision);
 
   return (
-    <Link href={`/spots/${data.spot.slug}`} asChild>
-      <Pressable style={styles.wrap}>
-        <View style={[styles.dot, { backgroundColor: dotColor }]} />
-        <Text style={styles.spotName} numberOfLines={1}>
-          {data.spot.name}
-        </Text>
-        {peak ? (
-          <>
-            <Text style={styles.sep}>·</Text>
-            <Text style={styles.wind}>
-              {Math.round(msToKnots(peak.windSpeedMs))} kn{" "}
-              <Text style={styles.windDir}>{cardinalDirection(peak.windDirectionDeg)}</Text>
+    <View style={styles.wrap}>
+      {data ? (
+        <Link href={`/spots/${data.spot.slug}`} asChild>
+          <Pressable style={styles.row}>
+            <View style={[styles.dot, { backgroundColor: dotColor }]} />
+            <Text style={styles.spotName} numberOfLines={1}>
+              {data.spot.name}
             </Text>
-          </>
-        ) : null}
-        <Text style={styles.sep}>·</Text>
-        <Text style={styles.label}>{label}</Text>
-        <View style={{ flex: 1 }} />
-        <Text style={styles.arrow}>→</Text>
-      </Pressable>
-    </Link>
+            {peak ? (
+              <>
+                <Text style={styles.sep}>·</Text>
+                <Text style={styles.wind}>
+                  {Math.round(msToKnots(peak.windSpeedMs))} kn{" "}
+                  <Text style={styles.windDir}>{cardinalDirection(peak.windDirectionDeg)}</Text>
+                </Text>
+              </>
+            ) : null}
+            <Text style={styles.sep}>·</Text>
+            <Text style={styles.label}>{label}</Text>
+          </Pressable>
+        </Link>
+      ) : (
+        <View style={styles.row} />
+      )}
+      {user ? (
+        <Link href="/(tabs)/profile" asChild>
+          <Pressable accessibilityLabel="Open profile" style={styles.avatarWrap}>
+            <Avatar
+              url={profile?.avatar_url ?? null}
+              name={profile?.display_name ?? null}
+              size={28}
+            />
+          </Pressable>
+        </Link>
+      ) : null}
+    </View>
   );
 }
 
@@ -95,11 +129,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     gap: 8,
   },
+  row: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   dot: { width: 8, height: 8, borderRadius: 4 },
   spotName: { fontSize: 14, fontWeight: "600", color: "#18181b" },
   sep: { fontSize: 14, color: "#a1a1aa" },
   wind: { fontSize: 13, color: "#3f3f46", fontVariant: ["tabular-nums"] },
   windDir: { color: "#71717a" },
   label: { fontSize: 11, fontWeight: "700", color: "#71717a", letterSpacing: 0.6 },
-  arrow: { fontSize: 14, color: "#a1a1aa" },
+  avatarWrap: {
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 999,
+  },
 });

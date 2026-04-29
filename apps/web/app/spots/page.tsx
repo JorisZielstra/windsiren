@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   dbRowToSpot,
   fetchSpotWeek,
+  getUserPrefs,
   peakWindMs,
+  prefsToThresholds,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import {
@@ -11,9 +14,19 @@ import {
   msToKnots,
   type SpotRegion,
 } from "@windsiren/shared";
+import { NearestSpotList, type NearestItem } from "@/components/NearestSpotList";
 import { VerdictBadge } from "@/components/VerdictBadge";
 
 export const dynamic = "force-dynamic";
+
+type SortKey = "verdict" | "wind" | "name" | "nearest";
+
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: "verdict", label: "Best today" },
+  { value: "wind", label: "Strongest wind" },
+  { value: "name", label: "A → Z" },
+  { value: "nearest", label: "Nearest to me" },
+];
 
 const DIRECTIONS: { label: string; deg: number }[] = [
   { label: "N", deg: 0 },
@@ -38,6 +51,7 @@ type Search = {
   dir?: string | string[];
   tide?: string;
   region?: string;
+  sort?: string;
 };
 
 export default async function SpotsPage({
@@ -50,6 +64,7 @@ export default async function SpotsPage({
   const selectedDirs = parseDirs(params.dir);
   const tideFilter = parseTide(params.tide);
   const regionFilter = parseRegion(params.region);
+  const sortKey = parseSort(params.sort);
 
   const { data: rows, error } = await supabase
     .from("spots")
@@ -71,7 +86,15 @@ export default async function SpotsPage({
 
   const spots = (rows ?? []).map(dbRowToSpot);
   const todayKey = nlLocalDateKey(new Date());
-  const spotWeeks = await Promise.all(spots.map((s) => fetchSpotWeek(s, 1)));
+  const authed = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authed.auth.getUser();
+  const userPrefs = await getUserPrefs(authed, user?.id ?? null);
+  const userThresholds = prefsToThresholds(userPrefs);
+  const spotWeeks = await Promise.all(
+    spots.map((s) => fetchSpotWeek(s, 1, userThresholds)),
+  );
   const items: SpotWithVerdict[] = spotWeeks.map((week) => {
     const today = week.days.find((d) => d.dateKey === todayKey) ?? week.days[0];
     return {
@@ -95,7 +118,8 @@ export default async function SpotsPage({
     return true;
   });
 
-  // Sort: GO → MAYBE → NO_GO → no data; alphabetical within each.
+  // Server-side sorts. "nearest" defers to the client (geolocation), so
+  // here we just stable-fall-back to "verdict" order.
   const score = (item: SpotWithVerdict): number => {
     if (item.verdict?.decision === "go") return 3;
     if (item.verdict?.decision === "marginal") return 2;
@@ -103,6 +127,15 @@ export default async function SpotsPage({
     return 0;
   };
   const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === "name") return a.spot.name.localeCompare(b.spot.name);
+    if (sortKey === "wind") {
+      const peakA = peakWindMs(a.hours) ?? -1;
+      const peakB = peakWindMs(b.hours) ?? -1;
+      const d = peakB - peakA;
+      if (d !== 0) return d;
+      return a.spot.name.localeCompare(b.spot.name);
+    }
+    // verdict + nearest fallback
     const d = score(b) - score(a);
     if (d !== 0) return d;
     return a.spot.name.localeCompare(b.spot.name);
@@ -113,25 +146,35 @@ export default async function SpotsPage({
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <h1 className="text-3xl font-bold tracking-tight">Spots</h1>
-      <p className="mt-1 text-sm text-zinc-500">
+      <h1 className="headline text-5xl text-ink">Spots</h1>
+      <p className="mt-2 font-mono text-xs uppercase tracking-[0.18em] text-ink-mute">
         {filtered.length} of {items.length} NL spots
-        {filtersActive ? " match your filters" : ""}
+        {filtersActive ? " · filtered" : ""}
       </p>
 
       <FiltersBar
         selectedDirs={selectedDirs}
         tideFilter={tideFilter}
         regionFilter={regionFilter}
+        sortKey={sortKey}
+      />
+
+      <SortBar
+        sortKey={sortKey}
+        selectedDirs={selectedDirs}
+        tideFilter={tideFilter}
+        regionFilter={regionFilter}
       />
 
       {sorted.length === 0 ? (
-        <div className="mt-8 rounded-md border border-zinc-200 px-4 py-8 text-center text-sm text-zinc-500 dark:border-zinc-800">
+        <div className="mt-8 rounded-xl border border-border bg-paper-2 px-4 py-8 text-center text-sm text-ink-mute">
           No spots match these filters.{" "}
           <Link href="/spots" className="underline">
             Clear filters
           </Link>
         </div>
+      ) : sortKey === "nearest" ? (
+        <NearestSpotList items={sorted.map(toNearestItem)} />
       ) : (
         <ul className="mt-6 space-y-2">
           {sorted.map((item) => (
@@ -143,14 +186,32 @@ export default async function SpotsPage({
   );
 }
 
+function toNearestItem(item: SpotWithVerdict): NearestItem {
+  return {
+    id: item.spot.id,
+    slug: item.spot.slug,
+    name: item.spot.name,
+    lat: item.spot.lat,
+    lng: item.spot.lng,
+    region: item.spot.region ?? null,
+    tideSensitive: item.spot.tideSensitive,
+    decision: item.verdict?.decision ?? null,
+    peakKn: peakWindMs(item.hours) === null
+      ? null
+      : msToKnots(peakWindMs(item.hours) as number),
+  };
+}
+
 function FiltersBar({
   selectedDirs,
   tideFilter,
   regionFilter,
+  sortKey,
 }: {
   selectedDirs: Set<number>;
   tideFilter: "any" | "only_tide" | "only_no_tide";
   regionFilter: SpotRegion | null;
+  sortKey: SortKey;
 }) {
   return (
     <div className="mt-6 space-y-3">
@@ -163,6 +224,7 @@ function FiltersBar({
             selectedDirs={selectedDirs}
             tideFilter={tideFilter}
             regionFilter={regionFilter}
+            sortKey={sortKey}
           />
         ))}
       </FilterGroup>
@@ -173,6 +235,7 @@ function FiltersBar({
           active={tideFilter === "any"}
           selectedDirs={selectedDirs}
           regionFilter={regionFilter}
+          sortKey={sortKey}
         />
         <TideChip
           label="Tide-sensitive"
@@ -180,6 +243,7 @@ function FiltersBar({
           active={tideFilter === "only_tide"}
           selectedDirs={selectedDirs}
           regionFilter={regionFilter}
+          sortKey={sortKey}
         />
         <TideChip
           label="Inland / no tide"
@@ -187,6 +251,7 @@ function FiltersBar({
           active={tideFilter === "only_no_tide"}
           selectedDirs={selectedDirs}
           regionFilter={regionFilter}
+          sortKey={sortKey}
         />
       </FilterGroup>
       <FilterGroup label="Region">
@@ -196,6 +261,7 @@ function FiltersBar({
           active={regionFilter === null}
           selectedDirs={selectedDirs}
           tideFilter={tideFilter}
+          sortKey={sortKey}
         />
         {REGIONS.map((r) => (
           <RegionChip
@@ -205,6 +271,34 @@ function FiltersBar({
             active={regionFilter === r.value}
             selectedDirs={selectedDirs}
             tideFilter={tideFilter}
+            sortKey={sortKey}
+          />
+        ))}
+      </FilterGroup>
+    </div>
+  );
+}
+
+function SortBar({
+  sortKey,
+  selectedDirs,
+  tideFilter,
+  regionFilter,
+}: {
+  sortKey: SortKey;
+  selectedDirs: Set<number>;
+  tideFilter: "any" | "only_tide" | "only_no_tide";
+  regionFilter: SpotRegion | null;
+}) {
+  return (
+    <div className="mt-3">
+      <FilterGroup label="Sort by">
+        {SORTS.map((s) => (
+          <Chip
+            key={s.value}
+            label={s.label}
+            active={s.value === sortKey}
+            href={buildHref(selectedDirs, tideFilter, regionFilter, s.value)}
           />
         ))}
       </FilterGroup>
@@ -221,7 +315,7 @@ function FilterGroup({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+      <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
         {label}
       </p>
       <div className="flex flex-wrap gap-1.5">{children}</div>
@@ -235,18 +329,20 @@ function DirChip({
   selectedDirs,
   tideFilter,
   regionFilter,
+  sortKey,
 }: {
   label: string;
   deg: number;
   selectedDirs: Set<number>;
   tideFilter: "any" | "only_tide" | "only_no_tide";
   regionFilter: SpotRegion | null;
+  sortKey: SortKey;
 }) {
   const active = selectedDirs.has(deg);
   const next = new Set(selectedDirs);
   if (active) next.delete(deg);
   else next.add(deg);
-  const href = buildHref(next, tideFilter, regionFilter);
+  const href = buildHref(next, tideFilter, regionFilter, sortKey);
   return <Chip label={label} active={active} href={href} />;
 }
 
@@ -256,14 +352,16 @@ function TideChip({
   active,
   selectedDirs,
   regionFilter,
+  sortKey,
 }: {
   label: string;
   value: "any" | "only_tide" | "only_no_tide";
   active: boolean;
   selectedDirs: Set<number>;
   regionFilter: SpotRegion | null;
+  sortKey: SortKey;
 }) {
-  const href = buildHref(selectedDirs, value, regionFilter);
+  const href = buildHref(selectedDirs, value, regionFilter, sortKey);
   return <Chip label={label} active={active} href={href} />;
 }
 
@@ -273,14 +371,16 @@ function RegionChip({
   active,
   selectedDirs,
   tideFilter,
+  sortKey,
 }: {
   label: string;
   value: SpotRegion | null;
   active: boolean;
   selectedDirs: Set<number>;
   tideFilter: "any" | "only_tide" | "only_no_tide";
+  sortKey: SortKey;
 }) {
-  const href = buildHref(selectedDirs, tideFilter, value);
+  const href = buildHref(selectedDirs, tideFilter, value, sortKey);
   return <Chip label={label} active={active} href={href} />;
 }
 
@@ -294,12 +394,12 @@ function Chip({
   href: string;
 }) {
   const cls = active
-    ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-    : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300";
+    ? "border-brand bg-brand-soft text-brand-strong"
+    : "border-border bg-paper-2 text-ink-2 hover:border-border-strong hover:text-ink";
   return (
     <Link
       href={href}
-      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${cls}`}
+      className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${cls}`}
     >
       {label}
     </Link>
@@ -309,25 +409,30 @@ function Chip({
 function SpotRow({ item }: { item: SpotWithVerdict }) {
   const peak = peakWindMs(item.hours);
   return (
-    <li className="flex items-center justify-between rounded-md border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900">
+    <li className="flex items-center justify-between rounded-lg border border-border bg-paper-2 px-4 py-3 transition-colors hover:border-border-strong hover:bg-paper-sunk">
       <Link href={`/spots/${item.spot.slug}`} className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{item.spot.name}</span>
+          <span className="font-semibold text-ink">{item.spot.name}</span>
           {item.spot.tideSensitive ? (
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-strong">
               Tide
             </span>
           ) : null}
           {item.spot.region ? (
-            <span className="text-xs text-zinc-500">{regionLabel(item.spot.region)}</span>
+            <span className="text-xs text-ink-mute">{regionLabel(item.spot.region)}</span>
           ) : null}
         </div>
-        <div className="mt-0.5 text-xs text-zinc-500">
-          {item.spot.lat.toFixed(3)}°N, {item.spot.lng.toFixed(3)}°E
+        <div className="mt-0.5 text-xs text-ink-mute">
+          <span className="font-mono">
+            {item.spot.lat.toFixed(3)}°N, {item.spot.lng.toFixed(3)}°E
+          </span>
           {peak !== null ? (
             <>
               {" · "}
-              peak <span className="font-mono">{msToKnots(peak).toFixed(0)} kn</span>
+              peak{" "}
+              <span className="font-mono font-semibold text-ink-2">
+                {msToKnots(peak).toFixed(0)} kn
+              </span>
             </>
           ) : null}
         </div>
@@ -367,10 +472,16 @@ function parseRegion(raw: string | undefined): SpotRegion | null {
   return null;
 }
 
+function parseSort(raw: string | undefined): SortKey {
+  if (raw === "wind" || raw === "name" || raw === "nearest") return raw;
+  return "verdict";
+}
+
 function buildHref(
   dirs: Set<number>,
   tide: "any" | "only_tide" | "only_no_tide",
   region: SpotRegion | null,
+  sort: SortKey,
 ): string {
   const params = new URLSearchParams();
   if (dirs.size > 0) {
@@ -382,6 +493,7 @@ function buildHref(
   }
   if (tide !== "any") params.set("tide", tide);
   if (region !== null) params.set("region", region);
+  if (sort !== "verdict") params.set("sort", sort);
   const qs = params.toString();
   return qs ? `/spots?${qs}` : "/spots";
 }

@@ -12,11 +12,14 @@ import Svg, {
   Circle,
   Line,
   Path,
+  Polygon,
   Rect,
   Text as SvgText,
 } from "react-native-svg";
 import {
   averageDirectionDeg,
+  bucketHours,
+  getSunTimes,
   type FriendsOnWaterToday,
   type PublicProfile,
   type SpotWeek,
@@ -27,10 +30,10 @@ import {
   DEFAULT_THRESHOLDS,
   isHourRideable,
   msToKnots,
+  windKnColor,
   type HourlyForecast,
   type Spot,
 } from "@windsiren/shared";
-import { DirectionNeedle } from "./DirectionNeedle";
 
 export type TileKey =
   | "score"
@@ -38,7 +41,10 @@ export type TileKey =
   | "airTemp"
   | "friends"
   | "peakWindow"
-  | "trend";
+  | "trend"
+  | "daylight"
+  | "verdict"
+  | "goSpots";
 
 type Props = {
   tile: TileKey | null;
@@ -90,7 +96,7 @@ export function TileModal({
                 selectedDate={selectedDate}
               />
             ) : tile === "wind" ? (
-              <WindPolarChart bestSpot={bestSpot} />
+              <WindRoseChart bestSpot={bestSpot} />
             ) : tile === "airTemp" ? (
               <HourlyLineChart
                 hours={bestSpot?.hours ?? []}
@@ -118,6 +124,20 @@ export function TileModal({
                 showHalfAverages
                 accent="#10b981"
               />
+            ) : tile === "verdict" ? (
+              <HourlyLineChart
+                hours={bestSpot?.hours ?? []}
+                valueOf={(h) => msToKnots(h.windSpeedMs)}
+                gustOf={(h) => msToKnots(h.gustMs)}
+                unit="kn"
+                spot={bestSpot?.spot}
+                shadeRideable
+                accent="#10b981"
+              />
+            ) : tile === "daylight" ? (
+              <SunArcChart bestSpot={bestSpot} selectedDate={selectedDate} />
+            ) : tile === "goSpots" ? (
+              <GoSpotsList dayItems={dayItems} onClose={onClose} />
             ) : tile === "friends" ? (
               <FriendsTimeline friends={friends} onClose={onClose} />
             ) : null}
@@ -268,45 +288,307 @@ function WeekScoreSpark({
 }
 
 // ---------------------------------------------------------------------------
-// Wind polar chart — needle + hourly list
+// Wind rose — 2-hour buckets drawn as arrows pointing downwind
 // ---------------------------------------------------------------------------
 
-function WindPolarChart({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function WindRoseChart({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   if (!bestSpot) return <NoData />;
   const daylight = daylightHoursOf(bestSpot.hours);
   if (daylight.length === 0) return <NoData />;
+  const buckets = bucketHours(daylight, bestSpot.spot, 2);
   const avg = averageDirectionDeg(daylight.map((h) => h.windDirectionDeg));
+
+  const size = 240;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = size / 2 - 22;
+  const maxKn = Math.max(1, ...buckets.map((b) => msToKnots(b.windSpeedMs)));
 
   return (
     <View style={{ gap: 16 }}>
       <View style={{ alignItems: "center" }}>
-        <DirectionNeedle directionDeg={avg} size={140} />
-        <Text style={styles.windAvgLabel}>{cardinalDirection(avg)}</Text>
-        <Text style={styles.windAvgSub}>{Math.round(avg)}° avg</Text>
-      </View>
-      <View>
-        <Text style={styles.sectionLabel}>Hourly direction</Text>
-        <View style={{ marginTop: 8, gap: 4 }}>
-          {daylight.map((h) => {
-            const localHour = nlLocalHour(new Date(h.time));
-            const knots = Math.round(msToKnots(h.windSpeedMs));
+        <Svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+          {[0.33, 0.66, 1].map((t) => (
+            <Circle
+              key={`r-${t}`}
+              cx={cx}
+              cy={cy}
+              r={rOuter * t}
+              fill="none"
+              stroke="#e4e4e7"
+            />
+          ))}
+          {([
+            { dir: 0, label: "N" },
+            { dir: 90, label: "E" },
+            { dir: 180, label: "S" },
+            { dir: 270, label: "W" },
+          ] as const).map(({ dir, label }) => {
+            const { x, y } = polar(cx, cy, rOuter + 12, dir);
             return (
-              <View key={h.time} style={styles.hourlyRow}>
-                <Text style={styles.hourlyTime}>{pad2(localHour)}:00</Text>
-                <Text style={styles.hourlyDir}>
-                  {cardinalDirection(h.windDirectionDeg)}{" "}
-                  <Text style={styles.hourlyDeg}>
-                    {Math.round(h.windDirectionDeg)}°
-                  </Text>
-                </Text>
-                <Text style={styles.hourlyKn}>{knots}kn</Text>
-              </View>
+              <SvgText
+                key={label}
+                x={x}
+                y={y + 3}
+                textAnchor="middle"
+                fontSize={10}
+                fill="#71717a"
+                fontWeight="600"
+              >
+                {label}
+              </SvgText>
             );
           })}
-        </View>
+          {/* Arrows point TOWARDS the wind source (meteorological
+              convention) so they match the spot-page wind rose. */}
+          {buckets.map((b) => {
+            const kn = msToKnots(b.windSpeedMs);
+            const len = (kn / maxKn) * rOuter * 0.92;
+            const bearing = b.windDirectionDeg;
+            const head = polar(cx, cy, len, bearing);
+            const tint = windKnColor(kn);
+            const ah = arrowHead(polar(cx, cy, len - 6, bearing), bearing);
+            const tickAt = polar(cx, cy, rOuter + 4, bearing);
+            return (
+              <React.Fragment key={b.startTime}>
+                <Line
+                  x1={cx}
+                  y1={cy}
+                  x2={head.x}
+                  y2={head.y}
+                  stroke={tint.bg}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                />
+                <Polygon
+                  points={`${ah.tip.x},${ah.tip.y} ${ah.left.x},${ah.left.y} ${ah.right.x},${ah.right.y}`}
+                  fill={tint.bg}
+                />
+                <SvgText
+                  x={tickAt.x}
+                  y={tickAt.y + 3}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fill="#a1a1aa"
+                >
+                  {`${pad2(b.startLocalHour)}h`}
+                </SvgText>
+              </React.Fragment>
+            );
+          })}
+          <Circle cx={cx} cy={cy} r={4} fill="#3f3f46" />
+        </Svg>
+        <Text style={styles.windAvgLabel}>{cardinalDirection(avg)}</Text>
+        <Text style={styles.windAvgSub}>
+          {Math.round(avg)}° avg · arrows show 2h windows
+        </Text>
+      </View>
+      <View style={{ gap: 8 }}>
+        {buckets.map((b) => {
+          const knots = Math.round(msToKnots(b.windSpeedMs));
+          const tint = windKnColor(knots);
+          return (
+            <View key={b.startTime} style={styles.windowRow}>
+              <Text style={styles.windowRowTime}>
+                {pad2(b.startLocalHour)}–{pad2(b.startLocalHour + 2)}h
+              </Text>
+              <MiniRose bearing={b.windDirectionDeg} tint={tint.bg} />
+              <Text
+                style={[
+                  styles.windowRowKn,
+                  { backgroundColor: tint.bg, color: tint.fg },
+                ]}
+              >
+                {knots} kn
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
+}
+
+function polar(cx: number, cy: number, r: number, bearingDeg: number) {
+  const a = ((bearingDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+}
+
+function arrowHead(from: { x: number; y: number }, bearing: number) {
+  const tip = {
+    x: from.x + 6 * Math.cos(((bearing - 90) * Math.PI) / 180),
+    y: from.y + 6 * Math.sin(((bearing - 90) * Math.PI) / 180),
+  };
+  const left = {
+    x: from.x + 4 * Math.cos((((bearing - 90) - 130) * Math.PI) / 180),
+    y: from.y + 4 * Math.sin((((bearing - 90) - 130) * Math.PI) / 180),
+  };
+  const right = {
+    x: from.x + 4 * Math.cos((((bearing - 90) + 130) * Math.PI) / 180),
+    y: from.y + 4 * Math.sin((((bearing - 90) + 130) * Math.PI) / 180),
+  };
+  return { tip, left, right };
+}
+
+// Per-row mini wind rose — see web TileModal.tsx for design rationale.
+function MiniRose({ bearing, tint }: { bearing: number; tint: string }) {
+  const size = 44;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = size / 2 - 4;
+  const head = polar(cx, cy, rOuter * 0.85, bearing);
+  const ah = arrowHead(polar(cx, cy, rOuter * 0.85 - 5, bearing), bearing);
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={rOuter}
+        fill="none"
+        stroke="#c9c3b5"
+        strokeWidth={1}
+      />
+      {[0, 90, 180, 270].map((deg) => {
+        const inner = polar(cx, cy, rOuter - 3, deg);
+        const outer = polar(cx, cy, rOuter, deg);
+        return (
+          <Line
+            key={`tick-${deg}`}
+            x1={inner.x}
+            y1={inner.y}
+            x2={outer.x}
+            y2={outer.y}
+            stroke="#a7b2b9"
+            strokeWidth={1}
+          />
+        );
+      })}
+      <Line
+        x1={cx}
+        y1={cy}
+        x2={head.x}
+        y2={head.y}
+        stroke={tint}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+      />
+      <Polygon
+        points={`${ah.tip.x},${ah.tip.y} ${ah.left.x},${ah.left.y} ${ah.right.x},${ah.right.y}`}
+        fill={tint}
+      />
+      <Circle cx={cx} cy={cy} r={1.5} fill="#324a59" />
+    </Svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sun-arc chart — semicircle from sunrise to sunset with current sun marker
+// ---------------------------------------------------------------------------
+
+function SunArcChart({
+  bestSpot,
+  selectedDate,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  selectedDate: string;
+}) {
+  if (!bestSpot) return <NoData />;
+  const noon = new Date(`${selectedDate}T12:00:00Z`);
+  const { sunrise, sunset } = getSunTimes(bestSpot.spot.lat, bestSpot.spot.lng, noon);
+  const lengthMs = sunset.getTime() - sunrise.getTime();
+  const hours = Math.floor(lengthMs / 3600000);
+  const minutes = Math.floor((lengthMs % 3600000) / 60000);
+  const solarNoon = new Date((sunrise.getTime() + sunset.getTime()) / 2);
+  const nowMs = Date.now();
+  const showNow = nowMs >= sunrise.getTime() && nowMs <= sunset.getTime();
+
+  const w = 320;
+  const h = 200;
+  const padX = 28;
+  const baseY = h - 36;
+  const r = (w - padX * 2) / 2;
+
+  const point = (t: number) => {
+    const f = (t - sunrise.getTime()) / lengthMs;
+    return {
+      x: padX + f * (w - padX * 2),
+      y: baseY - Math.sin(f * Math.PI) * r,
+    };
+  };
+
+  const p0 = point(sunrise.getTime());
+  const pPeak = point(solarNoon.getTime());
+  const p1 = point(sunset.getTime());
+  const ctrlY = 2 * pPeak.y - (p0.y + p1.y) / 2;
+  const arcPath = `M ${p0.x} ${p0.y} Q ${pPeak.x} ${ctrlY} ${p1.x} ${p1.y}`;
+  const nowPoint = showNow ? point(nowMs) : null;
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
+        <Line
+          x1={padX - 6}
+          y1={baseY}
+          x2={w - padX + 6}
+          y2={baseY}
+          stroke="#d4d4d8"
+          strokeWidth={1.5}
+        />
+        <Path
+          d={arcPath}
+          fill="none"
+          stroke="#fbbf24"
+          strokeWidth={3}
+          strokeLinecap="round"
+        />
+        <Circle cx={p0.x} cy={p0.y} r={5} fill="#f59e0b" />
+        <Circle cx={p1.x} cy={p1.y} r={5} fill="#f59e0b" />
+        <Circle cx={pPeak.x} cy={pPeak.y} r={4} fill="#fcd34d" />
+        {nowPoint ? (
+          <Circle cx={nowPoint.x} cy={nowPoint.y} r={9} fill="#fbbf24" stroke="#d97706" strokeWidth={1.5} />
+        ) : null}
+        <SvgText x={p0.x} y={baseY + 16} textAnchor="middle" fontSize={11} fill="#3f3f46">
+          {fmtClock(sunrise)}
+        </SvgText>
+        <SvgText x={p0.x} y={baseY + 28} textAnchor="middle" fontSize={9} fill="#71717a">
+          sunrise
+        </SvgText>
+        <SvgText x={p1.x} y={baseY + 16} textAnchor="middle" fontSize={11} fill="#3f3f46">
+          {fmtClock(sunset)}
+        </SvgText>
+        <SvgText x={p1.x} y={baseY + 28} textAnchor="middle" fontSize={9} fill="#71717a">
+          sunset
+        </SvgText>
+        <SvgText x={pPeak.x} y={pPeak.y - 10} textAnchor="middle" fontSize={10} fill="#71717a">
+          {fmtClock(solarNoon)}
+        </SvgText>
+      </Svg>
+      <View style={styles.dayStats}>
+        <DayStat label="Daylight" value={`${hours}h ${minutes}m`} />
+        <DayStat label="Sunrise" value={fmtClock(sunrise)} />
+        <DayStat label="Solar noon" value={fmtClock(solarNoon)} />
+        <DayStat label="Sunset" value={fmtClock(sunset)} />
+      </View>
+    </View>
+  );
+}
+
+function DayStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View>
+      <Text style={styles.dayStatLabel}>{label}</Text>
+      <Text style={styles.dayStatValue}>{value}</Text>
+    </View>
+  );
+}
+
+function fmtClock(d: Date): string {
+  return new Intl.DateTimeFormat("en-NL", {
+    timeZone: "Europe/Amsterdam",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -542,6 +824,80 @@ function LegendBar({ label }: { label: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// GO spots list — entered from the dashboard's "X spots are GO!" pill.
+// Filtered to verdict=go, sorted by rideable hours descending so the
+// best-bet spot is on top. Each row navigates to /spots/[slug].
+// ---------------------------------------------------------------------------
+
+function GoSpotsList({
+  dayItems,
+  onClose,
+}: {
+  dayItems: SpotWithVerdict[];
+  onClose: () => void;
+}) {
+  const goSpots = dayItems
+    .filter((d) => d.verdict?.decision === "go")
+    .map((d) => {
+      const rideable = d.hours.filter((h) =>
+        isHourRideable(h, d.spot, DEFAULT_THRESHOLDS),
+      ).length;
+      let peakWindMs = 0;
+      let peakGustMs = 0;
+      let peakDirDeg = 0;
+      for (const h of d.hours) {
+        if (h.windSpeedMs > peakWindMs) {
+          peakWindMs = h.windSpeedMs;
+          peakDirDeg = h.windDirectionDeg;
+        }
+        if (h.gustMs > peakGustMs) peakGustMs = h.gustMs;
+      }
+      return { item: d, rideable, peakWindMs, peakGustMs, peakDirDeg };
+    })
+    .sort((a, b) => b.rideable - a.rideable);
+
+  if (goSpots.length === 0) {
+    return (
+      <Text style={{ fontSize: 14, color: "#71717a" }}>
+        Nothing's GO right now. Tap the day strip to scan another day.
+      </Text>
+    );
+  }
+
+  return (
+    <View style={{ gap: 8 }}>
+      {goSpots.map(({ item, rideable, peakWindMs, peakGustMs, peakDirDeg }) => {
+        const tint = windKnColor(msToKnots(peakWindMs));
+        return (
+          <Link key={item.spot.id} href={`/spots/${item.spot.slug}`} asChild>
+            <Pressable style={styles.goRow} onPress={onClose}>
+              <View style={styles.goRowHeader}>
+                <Text style={styles.goRowName}>{item.spot.name}</Text>
+                <Text
+                  style={[
+                    styles.goRowChip,
+                    { backgroundColor: tint.bg, color: tint.fg },
+                  ]}
+                >
+                  peak {Math.round(msToKnots(peakWindMs))} kn /{" "}
+                  {Math.round(msToKnots(peakGustMs))}
+                </Text>
+              </View>
+              <View style={styles.goRowMeta}>
+                <Text style={styles.goRowMetaText}>
+                  {cardinalDirection(peakDirDeg)} · {rideable}h GO
+                </Text>
+                <Text style={styles.goRowOpen}>Open →</Text>
+              </View>
+            </Pressable>
+          </Link>
+        );
+      })}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Friends list
 // ---------------------------------------------------------------------------
 
@@ -595,16 +951,22 @@ function labelForTile(tile: TileKey): string {
     friends: "Friends on the water",
     peakWindow: "Peak window",
     trend: "Wind trend",
+    daylight: "Daylight",
+    verdict: "Verdict",
+    goSpots: "GO spots",
   }[tile];
 }
 
 function titleForTile(tile: TileKey, bestSpot: SpotWithVerdict | null): string {
   if (tile === "score") return "Score breakdown";
   const at = bestSpot ? ` · ${bestSpot.spot.name}` : "";
-  if (tile === "wind") return `Hourly direction${at}`;
+  if (tile === "wind") return `Wind rose${at}`;
   if (tile === "airTemp") return `Hourly temperature${at}`;
   if (tile === "peakWindow") return `Hourly wind${at}`;
   if (tile === "trend") return `Wind trend${at}`;
+  if (tile === "daylight") return `Sun arc${at}`;
+  if (tile === "verdict") return `Hourly wind${at}`;
+  if (tile === "goSpots") return "Where it's GO";
   return "Today's friends";
 }
 
@@ -725,7 +1087,48 @@ const styles = StyleSheet.create({
   hourlyTime: { fontSize: 11, color: "#71717a", fontVariant: ["tabular-nums"], width: 50 },
   hourlyDir: { fontSize: 13, color: "#18181b", fontWeight: "500", flex: 1 },
   hourlyDeg: { fontSize: 11, color: "#71717a" },
-  hourlyKn: { fontSize: 11, color: "#71717a", fontVariant: ["tabular-nums"], width: 36, textAlign: "right" },
+  hourlyKn: { fontSize: 11, color: "#71717a", fontVariant: ["tabular-nums"], minWidth: 36, textAlign: "right" },
+  windowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#ffffff",
+    borderColor: "#e8e2d2",
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+  windowRowTime: {
+    width: 70,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0b2e3f",
+    fontVariant: ["tabular-nums"],
+  },
+  windowRowKn: {
+    marginLeft: "auto",
+    fontSize: 14,
+    fontWeight: "700",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    fontVariant: ["tabular-nums"],
+    overflow: "hidden",
+  },
+  dayStats: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
+  dayStatLabel: {
+    fontSize: 9,
+    color: "#71717a",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  dayStatValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#18181b",
+    fontVariant: ["tabular-nums"],
+  },
   legendRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 8 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   legendSwatch: { width: 12, height: 2 },
@@ -742,4 +1145,36 @@ const styles = StyleSheet.create({
   },
   friendName: { fontSize: 14, fontWeight: "600", color: "#18181b" },
   friendOut: { fontSize: 11, color: "#71717a" },
+  goRow: {
+    backgroundColor: "#ecfdf5",
+    borderColor: "#a7f3d0",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  goRowHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 8,
+  },
+  goRowName: { flex: 1, fontSize: 15, fontWeight: "700", color: "#064e3b" },
+  goRowChip: {
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  goRowMeta: {
+    marginTop: 4,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 8,
+  },
+  goRowMetaText: { fontSize: 12, color: "#3f3f46" },
+  goRowOpen: { fontSize: 12, color: "#047857", fontWeight: "600" },
 });

@@ -13,7 +13,7 @@ import {
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfiles,
-  isUserRsvpdForDay,
+  getUserRsvpWindowsForDay,
   listSessionsForSpot,
   MAX_PHOTOS_PER_SESSION,
   summarizeWindForToday,
@@ -35,6 +35,10 @@ type Props = {
 };
 
 type DayOffset = 0 | 1 | 2;
+type RsvpWindow = number | "all";
+
+// 2-hour windows kiters can RSVP for. Storage column is the start hour.
+const RSVP_WINDOW_HOURS: number[] = [6, 8, 10, 12, 14, 16, 18];
 
 // YYYY-MM-DD for now-local + N days.
 function dateKeyForOffset(offset: DayOffset): string {
@@ -51,6 +55,10 @@ function dayLabel(offset: DayOffset): string {
   return d.toLocaleDateString("en-NL", { weekday: "long" });
 }
 
+function pad2(n: number): string {
+  return n.toString().padStart(2, "0");
+}
+
 export function SpotSocial({ spot }: Props) {
   const spotId = spot.id;
   const supabase = createSupabaseBrowserClient();
@@ -59,7 +67,11 @@ export function SpotSocial({ spot }: Props) {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [profiles, setProfiles] = useState<Map<string, PublicProfile>>(new Map());
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [myRsvpByDate, setMyRsvpByDate] = useState<Record<string, boolean>>({});
+  const [myWindowsByDate, setMyWindowsByDate] = useState<
+    Record<string, Set<RsvpWindow>>
+  >({});
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [photoUrlsBySession, setPhotoUrlsBySession] = useState<Map<string, string[]>>(new Map());
@@ -106,19 +118,18 @@ export function SpotSocial({ spot }: Props) {
     }
     setPhotoUrlsBySession(urlMap);
 
-    // My RSVP state for each day
+    // My RSVP windows for each day — multiple windows allowed per day.
     if (user) {
-      const checks = await Promise.all(
-        ([0, 1, 2] as DayOffset[]).map((o) =>
-          isUserRsvpdForDay(supabase, user.id, spotId, dateKeyForOffset(o)).then((v) => [
-            dateKeyForOffset(o),
-            v,
-          ] as const),
-        ),
+      const entries = await Promise.all(
+        ([0, 1, 2] as DayOffset[]).map(async (o) => {
+          const dateKey = dateKeyForOffset(o);
+          const set = await getUserRsvpWindowsForDay(supabase, user.id, spotId, dateKey);
+          return [dateKey, set] as const;
+        }),
       );
-      setMyRsvpByDate(Object.fromEntries(checks));
+      setMyWindowsByDate(Object.fromEntries(entries));
     } else {
-      setMyRsvpByDate({});
+      setMyWindowsByDate({});
     }
 
     setLoading(false);
@@ -128,15 +139,18 @@ export function SpotSocial({ spot }: Props) {
     refresh();
   }, [refresh]);
 
-  async function toggleRsvp(offset: DayOffset) {
+  async function toggleRsvp(dateKey: string, window: RsvpWindow) {
     if (!userId) return;
-    const dateKey = dateKeyForOffset(offset);
-    const already = myRsvpByDate[dateKey];
-    if (already) {
-      await deleteRsvp(supabase, userId, spotId, dateKey);
+    const key = `${dateKey}:${window}`;
+    setBusyKey(key);
+    const have = (myWindowsByDate[dateKey] ?? new Set()).has(window);
+    const windowArg = window === "all" ? null : window;
+    if (have) {
+      await deleteRsvp(supabase, userId, spotId, dateKey, windowArg);
     } else {
-      await createRsvp(supabase, userId, spotId, dateKey);
+      await createRsvp(supabase, userId, spotId, dateKey, windowArg);
     }
+    setBusyKey(null);
     refresh();
   }
 
@@ -171,28 +185,54 @@ export function SpotSocial({ spot }: Props) {
           {([0, 1, 2] as DayOffset[]).map((offset) => {
             const dateKey = dateKeyForOffset(offset);
             const count = counts[dateKey] ?? 0;
-            const mine = myRsvpByDate[dateKey];
+            const myWindows = myWindowsByDate[dateKey] ?? new Set<RsvpWindow>();
+            const haveAny = myWindows.size > 0;
+            const expanded = expandedDate === dateKey;
             const disabled = !userId;
             return (
               <button
                 key={offset}
                 type="button"
-                onClick={() => (userId ? toggleRsvp(offset) : null)}
+                onClick={() =>
+                  userId
+                    ? setExpandedDate(expanded ? null : dateKey)
+                    : null
+                }
                 disabled={disabled}
+                aria-expanded={expanded}
                 className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                  mine
+                  haveAny
                     ? "border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950"
                     : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-800"
-                } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+                } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
               >
-                <div className="font-medium">{dayLabel(offset)}</div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{dayLabel(offset)}</span>
+                  <span className="text-xs text-zinc-400">{expanded ? "▴" : "▾"}</span>
+                </div>
                 <div className="mt-0.5 text-xs text-zinc-500">
                   {count} kiter{count === 1 ? "" : "s"} going
                 </div>
+                {haveAny ? (
+                  <div className="mt-1 truncate text-[11px] text-emerald-700 dark:text-emerald-300">
+                    you: {summarizeWindows(myWindows)}
+                  </div>
+                ) : null}
               </button>
             );
           })}
         </div>
+
+        {/* Time-window chips for the expanded day */}
+        {expandedDate && userId ? (
+          <RsvpWindowChips
+            dateKey={expandedDate}
+            myWindows={myWindowsByDate[expandedDate] ?? new Set()}
+            busyKey={busyKey}
+            onToggle={(w) => toggleRsvp(expandedDate, w)}
+          />
+        ) : null}
+
         {!userId ? (
           <p className="mt-2 text-xs text-zinc-500">
             <Link href="/auth/sign-in" className="underline">
@@ -250,6 +290,78 @@ export function SpotSocial({ spot }: Props) {
       ) : null}
     </section>
   );
+}
+
+function RsvpWindowChips({
+  dateKey,
+  myWindows,
+  busyKey,
+  onToggle,
+}: {
+  dateKey: string;
+  myWindows: Set<RsvpWindow>;
+  busyKey: string | null;
+  onToggle: (window: RsvpWindow) => void;
+}) {
+  return (
+    <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+        Pick your time slot — you can pick multiple
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        <Chip
+          label="All day"
+          active={myWindows.has("all")}
+          loading={busyKey === `${dateKey}:all`}
+          onClick={() => onToggle("all")}
+        />
+        {RSVP_WINDOW_HOURS.map((h) => (
+          <Chip
+            key={h}
+            label={`${pad2(h)}–${pad2(h + 2)}`}
+            active={myWindows.has(h)}
+            loading={busyKey === `${dateKey}:${h}`}
+            onClick={() => onToggle(h)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Chip({
+  label,
+  active,
+  loading,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  const cls = active
+    ? "border-emerald-500 bg-emerald-100 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-100"
+    : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className={`rounded-full border px-3 py-1 font-mono text-xs transition-colors disabled:opacity-50 ${cls}`}
+    >
+      {loading ? "…" : label}
+    </button>
+  );
+}
+
+function summarizeWindows(set: Set<RsvpWindow>): string {
+  if (set.has("all")) return "all day";
+  const hours = Array.from(set)
+    .filter((w): w is number => w !== "all")
+    .sort((a, b) => a - b);
+  if (hours.length === 0) return "—";
+  return hours.map((h) => `${pad2(h)}–${pad2(h + 2)}`).join(", ");
 }
 
 function SessionComposer({

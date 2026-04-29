@@ -26,29 +26,27 @@ export async function WeatherStrip() {
   return (
     <Link
       href={`/spots/${spot.slug}`}
-      className="block border-b border-zinc-200 bg-white transition-colors hover:bg-zinc-50 dark:border-zinc-900 dark:bg-zinc-950 dark:hover:bg-zinc-900/60"
+      className="block border-b border-border bg-paper-2 transition-colors hover:bg-paper-sunk"
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-2.5 text-sm">
         <div className="flex items-center gap-3 min-w-0">
           <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dotCls}`} />
-          <span className="truncate font-medium text-zinc-900 dark:text-zinc-50">
-            {spot.name}
-          </span>
-          <span className="hidden text-zinc-500 sm:inline">·</span>
+          <span className="truncate font-semibold text-ink">{spot.name}</span>
+          <span className="hidden text-ink-faint sm:inline">·</span>
           {peakHour ? (
-            <span className="hidden text-zinc-700 sm:inline dark:text-zinc-300 font-mono">
+            <span className="hidden font-mono text-ink-2 sm:inline">
               {Math.round(msToKnots(peakHour.windSpeedMs))} kn{" "}
-              <span className="text-zinc-500">
+              <span className="text-ink-mute">
                 {cardinalDirection(peakHour.windDirectionDeg)}
               </span>
             </span>
           ) : null}
-          <span className="hidden text-zinc-500 sm:inline">·</span>
-          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          <span className="hidden text-ink-faint sm:inline">·</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-ink-mute">
             {labelText}
           </span>
         </div>
-        <span className="text-xs text-zinc-500">→</span>
+        <span className="text-xs text-ink-faint">→</span>
       </div>
     </Link>
   );
@@ -64,10 +62,10 @@ function pickPeakHour(hours: { windSpeedMs: number; windDirectionDeg: number; ti
 }
 
 function verdictDotClass(decision: "go" | "marginal" | "no_go" | undefined): string {
-  if (decision === "go") return "bg-emerald-500";
-  if (decision === "marginal") return "bg-amber-500";
-  if (decision === "no_go") return "bg-zinc-400 dark:bg-zinc-600";
-  return "bg-zinc-300 dark:bg-zinc-700";
+  if (decision === "go") return "bg-go";
+  if (decision === "marginal") return "bg-maybe";
+  if (decision === "no_go") return "bg-no-go";
+  return "bg-ink-faint";
 }
 
 function verdictLabel(decision: "go" | "marginal" | "no_go"): string {

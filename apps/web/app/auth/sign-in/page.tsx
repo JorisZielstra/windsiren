@@ -32,47 +32,52 @@ export default function SignInPage() {
 
   return (
     <main className="mx-auto max-w-sm px-6 py-16">
-      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+      <Link href="/" className="text-sm text-ink-mute hover:text-ink">
         ← Home
       </Link>
-      <h1 className="mt-4 text-3xl font-bold tracking-tight">Sign in</h1>
+      <h1 className="headline mt-4 text-4xl text-ink">Sign in</h1>
+      <p className="mt-2 text-sm text-ink-mute">
+        Welcome back. Wind's up — let's check the conditions.
+      </p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block">
-          <span className="text-sm font-medium">Email</span>
+          <span className="text-sm font-semibold text-ink-2">Email</span>
           <input
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="mt-1.5 block w-full rounded-lg border border-border bg-paper-2 px-3 py-2 text-ink outline-none transition-colors focus:border-brand"
           />
         </label>
         <label className="block">
-          <span className="text-sm font-medium">Password</span>
+          <span className="text-sm font-semibold text-ink-2">Password</span>
           <input
             type="password"
             required
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="mt-1.5 block w-full rounded-lg border border-border bg-paper-2 px-3 py-2 text-ink outline-none transition-colors focus:border-brand"
           />
         </label>
         {error ? (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="rounded-lg border border-hazard/30 bg-hazard-soft px-3 py-2 text-sm text-hazard">
+            {error}
+          </p>
         ) : null}
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-strong disabled:opacity-50"
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-6 text-sm text-ink-mute">
         No account yet?{" "}
-        <Link href="/auth/sign-up" className="underline">
+        <Link href="/auth/sign-up" className="font-semibold text-brand-link hover:underline">
           Create one
         </Link>
       </p>

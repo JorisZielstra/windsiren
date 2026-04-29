@@ -6,8 +6,14 @@ import {
   type SpotWeek,
   type SpotWithVerdict,
 } from "@windsiren/core";
-import type { HourlyForecast } from "@windsiren/shared";
-import { addDaysToKey, countRideable, mondayOfDate, weekDates } from "./dashboard-utils";
+import { msToKnots, type HourlyForecast } from "@windsiren/shared";
+import {
+  addDaysToKey,
+  countRideable,
+  daylightHours,
+  mondayOfDate,
+  weekDates,
+} from "./dashboard-utils";
 import {
   AirTempTile,
   DaylightTile,
@@ -16,8 +22,9 @@ import {
   TrendTile,
   WindTile,
 } from "./DayTiles";
+import { HomeSpotsManager, type DashboardScope } from "./HomeSpotsManager";
 import { TileModal, type TileKey } from "./TileModal";
-import { WeekStrip } from "./WeekStrip";
+import { WeekStrip, type WeekScoreEntry } from "./WeekStrip";
 
 type Props = {
   spotWeeks: SpotWeek[];
@@ -26,6 +33,10 @@ type Props = {
   friendsPreview: PublicProfile[];
   signedIn: boolean;
   homeSpotIds: Set<string>;
+  prefsSummary?: string;
+  // Bumped by the parent's data fetcher when home spots change so the
+  // dashboard re-derives `scopedSpotWeeks` against the new set.
+  onHomeSpotsMutated?: () => void;
 };
 
 export function TodayDashboard({
@@ -35,8 +46,12 @@ export function TodayDashboard({
   friendsPreview,
   signedIn,
   homeSpotIds,
+  prefsSummary,
+  onHomeSpotsMutated,
 }: Props) {
-  const personalized = signedIn && homeSpotIds.size > 0;
+  const [scope, setScope] = useState<DashboardScope>("personalized");
+  const personalized =
+    signedIn && homeSpotIds.size > 0 && scope === "personalized";
   const scopedSpotWeeks = useMemo(
     () =>
       personalized
@@ -67,10 +82,16 @@ export function TodayDashboard({
   const total = dayItems.length;
   const goCount = dayItems.filter((v) => v.verdict?.decision === "go").length;
   const dayScore = total > 0 ? Math.round((goCount / total) * 100) : 0;
-  const dayLabel = labelForScore(dayScore);
   const scoreAccent = dayScore >= 40;
 
   const bestSpot = pickBestSpot(dayItems);
+
+  // Hero stats track the *best* home spot, not an average across them —
+  // matches the web dashboard. See TodayDashboard.tsx (web) for rationale.
+  const heroWind = useMemo(
+    () => (bestSpot ? averageWindAndGust([bestSpot]) : null),
+    [bestSpot],
+  );
   const isToday = selectedDate === todayKey;
   const dateLabel = formatDateLabel(selectedDate, isToday);
   const weekScores = useMemo(
@@ -92,22 +113,47 @@ export function TodayDashboard({
           <>
             <View style={styles.heroRow}>
               <View style={styles.scoreCol}>
-                <Text style={[styles.scoreNum, scoreAccent && styles.scoreAccent]}>
-                  {dayScore}
-                </Text>
-                <Text style={styles.scoreOutOf}> / 100</Text>
+                {heroWind ? (
+                  <>
+                    <View style={styles.windRow}>
+                      <Text
+                        style={[styles.scoreNum, scoreAccent && styles.scoreAccent]}
+                      >
+                        {heroWind.windKn}
+                      </Text>
+                      <Text style={styles.windSep}>/</Text>
+                      <Text style={styles.gustNum}>{heroWind.gustKn}</Text>
+                      <Text style={styles.scoreOutOf}> kn</Text>
+                    </View>
+                    <Text style={styles.windCaption}>wind speed and gusts</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.scoreNum, { color: "#a1a1aa" }]}>—</Text>
+                )}
               </View>
               <View style={styles.scoreSummary}>
-                <Text style={styles.scoreLabel}>{dayLabel}</Text>
-                <Text style={styles.scoreSub}>
-                  <Text style={styles.scoreSubBold}>{goCount}</Text>
-                  {" "}of {total} {personalized ? "home spots" : "spots"} GO
-                </Text>
+                {goCount > 0 ? (
+                  <Pressable
+                    onPress={() => setActiveTile("goSpots")}
+                    style={({ pressed }) => [
+                      styles.goPill,
+                      pressed && { opacity: 0.85 },
+                    ]}
+                  >
+                    <Text style={styles.goPillText}>
+                      {goCount} spot{goCount === 1 ? "" : "s"} are GO! →
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.scoreSub}>
+                    0 of {total} {personalized ? "home spots" : "spots"} GO
+                  </Text>
+                )}
                 {bestSpot ? (
                   <Link href={`/spots/${bestSpot.spot.slug}`} asChild>
                     <Pressable>
                       <Text style={styles.bestLink}>
-                        Best: {bestSpot.spot.name} · {countRideable(bestSpot)}h GO →
+                        {bestSpot.spot.name} · {countRideable(bestSpot)}h GO →
                       </Text>
                     </Pressable>
                   </Link>
@@ -125,20 +171,32 @@ export function TodayDashboard({
               />
             </View>
             <View style={styles.scoreFooterRow}>
-              <Pressable onPress={() => setActiveTile("score")}>
-                <Text style={styles.viewBreakdown}>View breakdown →</Text>
-              </Pressable>
-              {signedIn && homeSpotIds.size === 0 ? (
-                <Text style={styles.scopeHint} numberOfLines={2}>
-                  Open a spot to set it as a home spot
-                </Text>
-              ) : personalized ? (
-                <Text style={styles.scopeHint}>
-                  Personalized · {homeSpotIds.size} home
-                  {homeSpotIds.size === 1 ? "" : "s"}
-                </Text>
+              <View />
+              {signedIn ? (
+                <HomeSpotsManager
+                  homeSpotIds={homeSpotIds}
+                  allSpots={spotWeeks.map((w) => w.spot)}
+                  scope={scope}
+                  onScopeChange={setScope}
+                  onMutated={() => onHomeSpotsMutated?.()}
+                />
               ) : null}
             </View>
+            {signedIn ? (
+              <View style={styles.prefsRow}>
+                <Text style={styles.prefsText} numberOfLines={1}>
+                  GO threshold:{" "}
+                  <Text style={styles.prefsTextValue}>
+                    {prefsSummary ?? "min 15 kn"}
+                  </Text>
+                </Text>
+                <Link href="/profile-prefs" asChild>
+                  <Pressable hitSlop={8}>
+                    <Text style={styles.prefsLink}>Edit →</Text>
+                  </Pressable>
+                </Link>
+              </View>
+            ) : null}
           </>
         )}
       </View>
@@ -188,7 +246,11 @@ export function TodayDashboard({
           item={bestSpot}
           onPress={() => setActiveTile("peakWindow")}
         />
-        <DaylightTile item={bestSpot} selectedDate={selectedDate} />
+        <DaylightTile
+          item={bestSpot}
+          selectedDate={selectedDate}
+          onPress={() => setActiveTile("daylight")}
+        />
         <TrendTile item={bestSpot} onPress={() => setActiveTile("trend")} />
       </View>
 
@@ -267,19 +329,26 @@ function collectDateKeys(spotWeeks: SpotWeek[]): string[] {
 function buildWeekScores(
   spotWeeks: SpotWeek[],
   dateKeys: string[],
-): Map<string, { score: number; goCount: number; total: number }> {
-  const out = new Map<string, { score: number; goCount: number; total: number }>();
+): Map<string, WeekScoreEntry> {
+  const out = new Map<string, WeekScoreEntry>();
   for (const dateKey of dateKeys) {
     let goCount = 0;
     let total = 0;
+    let windSum = 0;
+    let windN = 0;
     for (const week of spotWeeks) {
       const day = week.days.find((d) => d.dateKey === dateKey);
       if (!day) continue;
       total += 1;
       if (day.verdict?.decision === "go") goCount += 1;
+      for (const h of daylightHours(day.hours)) {
+        windSum += h.windSpeedMs;
+        windN++;
+      }
     }
     const score = total > 0 ? Math.round((goCount / total) * 100) : 0;
-    out.set(dateKey, { score, goCount, total });
+    const avgWindKn = windN > 0 ? Math.round(msToKnots(windSum / windN)) : null;
+    out.set(dateKey, { score, goCount, total, avgWindKn });
   }
   return out;
 }
@@ -319,12 +388,26 @@ function peakOf(hours: HourlyForecast[]): number {
   return max;
 }
 
-function labelForScore(score: number): string {
-  if (score >= 70) return "Banger day";
-  if (score >= 40) return "Solid day";
-  if (score >= 20) return "Pockets of action";
-  return "Mellow day";
+function averageWindAndGust(
+  items: SpotWithVerdict[],
+): { windKn: number; gustKn: number } | null {
+  let windSum = 0;
+  let gustSum = 0;
+  let n = 0;
+  for (const item of items) {
+    for (const h of daylightHours(item.hours)) {
+      windSum += h.windSpeedMs;
+      gustSum += h.gustMs;
+      n++;
+    }
+  }
+  if (n === 0) return null;
+  return {
+    windKn: Math.round(msToKnots(windSum / n)),
+    gustKn: Math.round(msToKnots(gustSum / n)),
+  };
 }
+
 
 function formatDateLabel(dateKey: string, isToday: boolean): string {
   const d = new Date(`${dateKey}T12:00:00Z`);
@@ -356,7 +439,8 @@ const styles = StyleSheet.create({
   todayDate: { fontSize: 11, color: "#71717a" },
   empty: { marginTop: 16, fontSize: 13, color: "#71717a" },
   heroRow: { marginTop: 12, flexDirection: "row", alignItems: "flex-end", gap: 16 },
-  scoreCol: { flexDirection: "row", alignItems: "baseline" },
+  scoreCol: { flexDirection: "column", alignItems: "flex-start" },
+  windRow: { flexDirection: "row", alignItems: "baseline" },
   scoreNum: {
     fontSize: 48,
     fontWeight: "700",
@@ -366,9 +450,45 @@ const styles = StyleSheet.create({
   },
   scoreAccent: { color: "#059669" },
   scoreOutOf: { fontSize: 13, color: "#71717a", marginLeft: 4 },
+  windSep: {
+    fontSize: 28,
+    fontWeight: "600",
+    color: "#a1a1aa",
+    marginHorizontal: 4,
+    fontVariant: ["tabular-nums"],
+  },
+  gustNum: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#3f3f46",
+    fontVariant: ["tabular-nums"],
+  },
+  windCaption: {
+    marginTop: 4,
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: "#71717a",
+    textTransform: "uppercase",
+  },
   scoreSummary: { flex: 1, paddingBottom: 4 },
   scoreLabel: { fontSize: 16, fontWeight: "600", color: "#18181b" },
   scoreSub: { fontSize: 13, color: "#71717a", marginTop: 2 },
+  goPill: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    backgroundColor: "#ecfdf5",
+    borderColor: "#6ee7b7",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  goPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#065f46",
+  },
   scoreSubBold: { color: "#18181b", fontWeight: "600", fontVariant: ["tabular-nums"] },
   bestLink: { fontSize: 13, color: "#059669", marginTop: 4 },
   scoreBarTrack: {
@@ -397,6 +517,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   scopeHint: { fontSize: 11, color: "#71717a", flexShrink: 1, textAlign: "right" },
+  prefsRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopColor: "#f4f4f5",
+    borderTopWidth: 1,
+  },
+  prefsText: { flex: 1, fontSize: 11, color: "#71717a" },
+  prefsTextValue: { color: "#3f3f46", fontVariant: ["tabular-nums"] },
+  prefsLink: { fontSize: 11, color: "#059669", fontWeight: "600" },
   // Styles below are still used by the inline FriendsTile / SignInTile —
   // those reuse the per-spot Tile shell from DayTiles.tsx but render
   // dashboard-specific content.

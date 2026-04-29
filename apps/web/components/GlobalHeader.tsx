@@ -1,33 +1,51 @@
 import Link from "next/link";
+import { getPublicProfile } from "@windsiren/core";
+import { Avatar } from "@/components/Avatar";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
-// Sticky brand + nav at the top of every page.
+// Sticky brand + nav at the top of every page. Sits on the paper-sunk
+// surface so the hero card below floats above it. Brand uses the
+// display headline class for tighter tracking.
 export async function GlobalHeader() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const profile = user ? await getPublicProfile(supabase, user.id) : null;
 
   return (
-    <header className="border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-900 dark:bg-zinc-950/95">
+    <header className="sticky top-0 z-30 border-b border-border bg-paper-sunk/85 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
         <Link
           href="/"
-          className="text-base font-bold tracking-tight text-zinc-950 dark:text-zinc-50"
+          className="headline flex items-baseline gap-1.5 text-base text-ink"
         >
-          windsiren
+          <span className="text-brand">windsiren</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-ink-mute">
+            kite
+          </span>
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex items-center gap-0.5 text-sm">
           <NavLink href="/" label="Today" />
           <NavLink href="/spots" label="Spots" />
           <NavLink href="/map" label="Map" />
           {user ? <NavLink href="/feed" label="Feed" /> : null}
           {user ? (
-            <NavLink href="/profile" label="Profile" />
+            <Link
+              href="/profile"
+              aria-label="Profile"
+              className="ml-2 rounded-full ring-1 ring-border-strong transition-shadow hover:ring-brand"
+            >
+              <Avatar
+                url={profile?.avatar_url ?? null}
+                name={profile?.display_name ?? null}
+                size={32}
+              />
+            </Link>
           ) : (
             <Link
               href="/auth/sign-in"
-              className="ml-2 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+              className="ml-2 rounded-md bg-brand px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
             >
               Sign in
             </Link>
@@ -42,7 +60,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="rounded-md px-3 py-1.5 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+      className="rounded-md px-3 py-1.5 text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink"
     >
       {label}
     </Link>

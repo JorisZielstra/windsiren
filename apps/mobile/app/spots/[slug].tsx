@@ -3,12 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, G, Line, Path, Text as SvgText } from "react-native-svg";
-import {
-  cardinalDirection,
-  msToKnots,
-  type Spot,
-  type TidePoint,
-} from "@windsiren/shared";
+import { type Spot, type TidePoint } from "@windsiren/shared";
 import {
   addFavorite,
   addHomeSpot,
@@ -18,9 +13,11 @@ import {
   fetchLiveObservation,
   fetchSpotWeek,
   fetchHomeSpotIds,
+  getUserPrefs,
   isHomeSpot,
   isSpotFavorited,
   needleEndpoint,
+  prefsToThresholds,
   removeFavorite,
   removeHomeSpot,
   SUGGESTED_HOME_SPOT_MAX,
@@ -28,6 +25,8 @@ import {
   type LiveObservation,
   type SpotWeek,
 } from "@windsiren/core";
+import { CollapsibleSection } from "../../components/CollapsibleSection";
+import { LiveObservationCard } from "../../components/LiveObservationCard";
 import { SpotConditionsBlock } from "../../components/SpotConditionsBlock";
 import { SpotSocial } from "../../components/SpotSocial";
 import { WindguruDayTable } from "../../components/WindguruDayTable";
@@ -105,8 +104,10 @@ function WindRose({
 
 export default function SpotDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { user } = useAuth();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -132,8 +133,11 @@ export default function SpotDetailScreen() {
       const spot = dbRowToSpot(row);
 
       try {
+        const userPrefs = await getUserPrefs(supabase, userId);
+        if (cancelled) return;
+        const userThresholds = prefsToThresholds(userPrefs);
         const [spotWeek, live] = await Promise.all([
-          fetchSpotWeek(spot, 16),
+          fetchSpotWeek(spot, 16, userThresholds),
           fetchLiveObservation(spot, process.env.EXPO_PUBLIC_KNMI_API_KEY),
         ]);
         if (cancelled) return;
@@ -154,7 +158,7 @@ export default function SpotDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, userId]);
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -172,27 +176,38 @@ export default function SpotDetailScreen() {
             spot={loaded.spot}
             liveDirection={loaded.live?.observation.windDirectionDeg ?? null}
           />
-          {loaded.live ? <LivePanel live={loaded.live} /> : null}
-          {loaded.spotWeek.days.length > 0 ? (
-            <View style={{ marginVertical: 16 }}>
-              <SpotConditionsBlock
-                spotWeek={loaded.spotWeek}
-                todayKey={loaded.todayKey}
-              />
-            </View>
-          ) : null}
-          {loaded.spotWeek.days.length > 0 ? (
-            <View style={styles.forecastSection}>
-              <Text style={styles.sectionLabel}>
-                Forecast — next {loaded.spotWeek.days.length} days
-              </Text>
-              <WindguruDayTable
-                spot={loaded.spot}
-                hours={loaded.spotWeek.days.flatMap((d) => d.hours)}
-                tideEvents={loaded.tideEvents}
-              />
-            </View>
-          ) : null}
+          <View style={styles.panelsCard}>
+            {loaded.live ? (
+              <LiveObservationCard live={loaded.live} spot={loaded.spot} />
+            ) : null}
+            {loaded.spotWeek.days.length > 0 ? (
+              <View style={styles.panelDivider}>
+                <CollapsibleSection
+                  title={`Conditions for ${loaded.spot.name}`}
+                  subtitle="Tap a day to pivot · tap a tile for hourly chart"
+                >
+                  <SpotConditionsBlock
+                    spotWeek={loaded.spotWeek}
+                    todayKey={loaded.todayKey}
+                    headless
+                  />
+                </CollapsibleSection>
+              </View>
+            ) : null}
+            {loaded.spotWeek.days.length > 0 ? (
+              <View style={styles.panelDivider}>
+                <CollapsibleSection
+                  title={`Forecast — next ${loaded.spotWeek.days.length} days`}
+                >
+                  <WindguruDayTable
+                    spot={loaded.spot}
+                    hours={loaded.spotWeek.days.flatMap((d) => d.hours)}
+                    tideEvents={loaded.tideEvents}
+                  />
+                </CollapsibleSection>
+              </View>
+            ) : null}
+          </View>
           <SpotSocial spot={loaded.spot} />
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -251,7 +266,6 @@ function SpotHeader({
         </View>
       </View>
 
-      {spot.hazards ? <Text style={styles.hazard}>⚠ {spot.hazards}</Text> : null}
     </View>
   );
 }
@@ -393,46 +407,6 @@ function HomeSpotButton({ spotId }: { spotId: string }) {
   );
 }
 
-function LivePanel({ live }: { live: LiveObservation }) {
-  const { observation: o, ageMinutes } = live;
-  const stale = ageMinutes > 20;
-  return (
-    <View style={styles.livePanel}>
-      <View style={styles.liveHeader}>
-        <Text style={styles.liveHeaderLabel}>LIVE — KNMI {o.stationId}</Text>
-        <Text style={stale ? styles.liveAgeStale : styles.liveAge}>
-          {ageMinutes === 0 ? "just now" : `${ageMinutes} min ago`}
-          {stale ? " · stale" : ""}
-        </Text>
-      </View>
-      <View style={styles.liveStats}>
-        <LiveStat
-          label="Wind"
-          value={`${msToKnots(o.windSpeedMs).toFixed(0)} kn`}
-          sub={cardinalDirection(o.windDirectionDeg)}
-        />
-        <LiveStat label="Gust" value={`${msToKnots(o.gustMs).toFixed(0)} kn`} />
-        <LiveStat label="Dir" value={`${Math.round(o.windDirectionDeg)}°`} />
-        {o.airTempC !== null ? (
-          <LiveStat label="Air" value={`${o.airTempC.toFixed(0)}°C`} />
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function LiveStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <View style={styles.liveStat}>
-      <Text style={styles.liveStatLabel}>{label}</Text>
-      <View style={styles.liveStatValueRow}>
-        <Text style={styles.liveStatValue}>{value}</Text>
-        {sub ? <Text style={styles.liveStatSub}>{sub}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   scroll: { padding: 16 },
@@ -487,33 +461,21 @@ const styles = StyleSheet.create({
   homeBtnActive: { borderColor: "#10b981", backgroundColor: "#ecfdf5" },
   homeBtnText: { fontSize: 13, fontWeight: "600", color: "#18181b" },
   homeBtnActiveText: { fontSize: 13, fontWeight: "600", color: "#065f46" },
-  livePanel: {
-    padding: 14,
-    marginBottom: 24,
-    borderRadius: 10,
-    backgroundColor: "#fafafa",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#e5e5e5",
+  panelsCard: {
+    marginVertical: 16,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    overflow: "hidden",
   },
-  liveHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  liveHeaderLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    color: "#6b7280",
+  panelDivider: {
+    borderTopWidth: 1,
+    borderTopColor: "#f4f4f5",
   },
-  liveAge: { fontSize: 11, color: "#6b7280" },
-  liveAgeStale: { fontSize: 11, color: "#b45309" },
-  liveStats: { flexDirection: "row", flexWrap: "wrap", gap: 20 },
-  liveStat: {},
-  liveStatLabel: { fontSize: 10, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 },
-  liveStatValueRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 },
-  liveStatValue: { fontSize: 20, fontWeight: "600", fontVariant: ["tabular-nums"] },
-  liveStatSub: { fontSize: 11, color: "#6b7280" },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 10 },
   title: { fontSize: 26, fontWeight: "700" },
   meta: { fontSize: 12, color: "#6b7280", marginTop: 4 },
-  hazard: { fontSize: 13, color: "#b45309", marginTop: 8 },
   tideBadge: {
     backgroundColor: "#dbeafe",
     paddingHorizontal: 8,
@@ -521,15 +483,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   tideBadgeText: { fontSize: 10, color: "#1e40af", fontWeight: "600" },
-  forecastSection: { marginVertical: 16 },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    color: "#6b7280",
-    textTransform: "uppercase",
-    marginBottom: 10,
-  },
   table: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#e5e5e5",

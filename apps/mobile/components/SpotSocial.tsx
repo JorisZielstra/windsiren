@@ -23,7 +23,7 @@ import {
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfiles,
-  isUserRsvpdForDay,
+  getUserRsvpWindowsForDay,
   listSessionsForSpot,
   MAX_PHOTOS_PER_SESSION,
   summarizeWindForToday,
@@ -38,6 +38,9 @@ import { relativeTime } from "../lib/relative-time";
 import { SessionCard } from "./SessionCard";
 
 type DayOffset = 0 | 1 | 2;
+type RsvpWindow = number | "all";
+
+const RSVP_WINDOW_HOURS: number[] = [6, 8, 10, 12, 14, 16, 18];
 
 function dateKeyForOffset(offset: DayOffset): string {
   const d = new Date();
@@ -53,6 +56,19 @@ function dayLabel(offset: DayOffset): string {
   return d.toLocaleDateString("en-NL", { weekday: "long" });
 }
 
+function pad2(n: number): string {
+  return n.toString().padStart(2, "0");
+}
+
+function summarizeWindows(set: Set<RsvpWindow>): string {
+  if (set.has("all")) return "all day";
+  const hours = Array.from(set)
+    .filter((w): w is number => w !== "all")
+    .sort((a, b) => a - b);
+  if (hours.length === 0) return "—";
+  return hours.map((h) => `${pad2(h)}–${pad2(h + 2)}`).join(", ");
+}
+
 export function SpotSocial({ spot }: { spot: Spot }) {
   const spotId = spot.id;
   const { user } = useAuth();
@@ -60,7 +76,11 @@ export function SpotSocial({ spot }: { spot: Spot }) {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [profiles, setProfiles] = useState<Map<string, PublicProfile>>(new Map());
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [myRsvpByDate, setMyRsvpByDate] = useState<Record<string, boolean>>({});
+  const [myWindowsByDate, setMyWindowsByDate] = useState<
+    Record<string, Set<RsvpWindow>>
+  >({});
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [photoUrls, setPhotoUrls] = useState<Map<string, string[]>>(new Map());
@@ -102,16 +122,16 @@ export function SpotSocial({ spot }: { spot: Spot }) {
     setPhotoUrls(urlMap);
 
     if (user) {
-      const checks = await Promise.all(
-        ([0, 1, 2] as DayOffset[]).map((o) =>
-          isUserRsvpdForDay(supabase, user.id, spotId, dateKeyForOffset(o)).then(
-            (v) => [dateKeyForOffset(o), v] as const,
-          ),
-        ),
+      const entries = await Promise.all(
+        ([0, 1, 2] as DayOffset[]).map(async (o) => {
+          const dateKey = dateKeyForOffset(o);
+          const set = await getUserRsvpWindowsForDay(supabase, user.id, spotId, dateKey);
+          return [dateKey, set] as const;
+        }),
       );
-      setMyRsvpByDate(Object.fromEntries(checks));
+      setMyWindowsByDate(Object.fromEntries(entries));
     } else {
-      setMyRsvpByDate({});
+      setMyWindowsByDate({});
     }
 
     setLoading(false);
@@ -121,15 +141,18 @@ export function SpotSocial({ spot }: { spot: Spot }) {
     refresh();
   }, [refresh]);
 
-  async function toggleRsvp(offset: DayOffset) {
+  async function toggleRsvp(dateKey: string, window: RsvpWindow) {
     if (!user) return;
-    const dateKey = dateKeyForOffset(offset);
-    const already = myRsvpByDate[dateKey];
-    if (already) {
-      await deleteRsvp(supabase, user.id, spotId, dateKey);
+    const key = `${dateKey}:${window}`;
+    setBusyKey(key);
+    const have = (myWindowsByDate[dateKey] ?? new Set()).has(window);
+    const windowArg = window === "all" ? null : window;
+    if (have) {
+      await deleteRsvp(supabase, user.id, spotId, dateKey, windowArg);
     } else {
-      await createRsvp(supabase, user.id, spotId, dateKey);
+      await createRsvp(supabase, user.id, spotId, dateKey, windowArg);
     }
+    setBusyKey(null);
     refresh();
   }
 
@@ -153,21 +176,44 @@ export function SpotSocial({ spot }: { spot: Spot }) {
         {([0, 1, 2] as DayOffset[]).map((offset) => {
           const dateKey = dateKeyForOffset(offset);
           const count = counts[dateKey] ?? 0;
-          const mine = myRsvpByDate[dateKey];
+          const myWindows = myWindowsByDate[dateKey] ?? new Set<RsvpWindow>();
+          const haveAny = myWindows.size > 0;
+          const expanded = expandedDate === dateKey;
           return (
             <Pressable
               key={offset}
-              onPress={() => (user ? toggleRsvp(offset) : router.push("/sign-in"))}
-              style={[styles.rsvpCard, mine ? styles.rsvpCardActive : null]}
+              onPress={() =>
+                user
+                  ? setExpandedDate(expanded ? null : dateKey)
+                  : router.push("/sign-in")
+              }
+              style={[styles.rsvpCard, haveAny ? styles.rsvpCardActive : null]}
             >
-              <Text style={styles.rsvpDay}>{dayLabel(offset)}</Text>
+              <View style={styles.rsvpCardHeader}>
+                <Text style={styles.rsvpDay}>{dayLabel(offset)}</Text>
+                <Text style={styles.rsvpChevron}>{expanded ? "▴" : "▾"}</Text>
+              </View>
               <Text style={styles.rsvpCount}>
                 {count} kiter{count === 1 ? "" : "s"} going
               </Text>
+              {haveAny ? (
+                <Text style={styles.rsvpMine} numberOfLines={1}>
+                  you: {summarizeWindows(myWindows)}
+                </Text>
+              ) : null}
             </Pressable>
           );
         })}
       </View>
+
+      {expandedDate && user ? (
+        <RsvpWindowChips
+          dateKey={expandedDate}
+          myWindows={myWindowsByDate[expandedDate] ?? new Set()}
+          busyKey={busyKey}
+          onToggle={(w) => toggleRsvp(expandedDate, w)}
+        />
+      ) : null}
 
       <Text style={[styles.subLabel, { marginTop: 16 }]}>Recent sessions</Text>
       {loading ? (
@@ -216,6 +262,71 @@ export function SpotSocial({ spot }: { spot: Spot }) {
         ) : null}
       </Modal>
     </View>
+  );
+}
+
+function RsvpWindowChips({
+  dateKey,
+  myWindows,
+  busyKey,
+  onToggle,
+}: {
+  dateKey: string;
+  myWindows: Set<RsvpWindow>;
+  busyKey: string | null;
+  onToggle: (window: RsvpWindow) => void;
+}) {
+  return (
+    <View style={styles.rsvpChipsBox}>
+      <Text style={styles.rsvpChipsLabel}>
+        Pick your time slot — you can pick multiple
+      </Text>
+      <View style={styles.rsvpChipsRow}>
+        <RsvpChip
+          label="All day"
+          active={myWindows.has("all")}
+          loading={busyKey === `${dateKey}:all`}
+          onPress={() => onToggle("all")}
+        />
+        {RSVP_WINDOW_HOURS.map((h) => (
+          <RsvpChip
+            key={h}
+            label={`${pad2(h)}–${pad2(h + 2)}`}
+            active={myWindows.has(h)}
+            loading={busyKey === `${dateKey}:${h}`}
+            onPress={() => onToggle(h)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function RsvpChip({
+  label,
+  active,
+  loading,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => [
+        styles.rsvpChip,
+        active && styles.rsvpChipActive,
+        pressed && styles.rsvpChipPressed,
+      ]}
+    >
+      <Text style={[styles.rsvpChipText, active && styles.rsvpChipTextActive]}>
+        {loading ? "…" : label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -421,8 +532,44 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   rsvpCardActive: { borderColor: "#10b981", backgroundColor: "#ecfdf5" },
+  rsvpCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rsvpDay: { fontSize: 13, fontWeight: "600", color: "#18181b" },
+  rsvpChevron: { fontSize: 12, color: "#a1a1aa" },
   rsvpCount: { fontSize: 11, color: "#6b7280", marginTop: 2 },
+  rsvpMine: { fontSize: 11, color: "#047857", marginTop: 4 },
+  rsvpChipsBox: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#fafafa",
+    borderColor: "#e4e4e7",
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  rsvpChipsLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#71717a",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  rsvpChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  rsvpChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#d4d4d8",
+    backgroundColor: "#fff",
+  },
+  rsvpChipActive: { borderColor: "#10b981", backgroundColor: "#ecfdf5" },
+  rsvpChipPressed: { opacity: 0.6 },
+  rsvpChipText: {
+    fontSize: 12,
+    color: "#3f3f46",
+    fontVariant: ["tabular-nums"],
+  },
+  rsvpChipTextActive: { color: "#065f46", fontWeight: "600" },
   empty: { fontSize: 13, color: "#9ca3af", marginTop: 6 },
   sessionList: { marginTop: 6, gap: 10 },
   modalBackdrop: {

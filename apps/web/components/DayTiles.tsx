@@ -13,6 +13,7 @@ import {
   daylightHours,
   fmtNlClock,
   longestRideableRun,
+  nlLocalHour,
   pad2,
 } from "@/components/dashboard-utils";
 
@@ -32,11 +33,13 @@ export function Tile({
 }) {
   const inner = (
     <>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+      <div className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
         {label}
       </div>
-      <div className="mt-1.5">{children}</div>
-      {sub ? <div className="mt-1 truncate text-xs text-zinc-500">{sub}</div> : null}
+      <div className="mt-2">{children}</div>
+      {sub ? (
+        <div className="mt-1.5 truncate text-[11px] text-ink-mute">{sub}</div>
+      ) : null}
     </>
   );
   if (onClick) {
@@ -44,13 +47,19 @@ export function Tile({
       <button
         type="button"
         onClick={onClick}
-        className="block w-full bg-white p-4 text-left transition-colors hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+        className="group relative block w-full bg-paper-2 p-4 text-left transition-colors hover:bg-paper-sunk"
       >
         {inner}
+        <span
+          aria-hidden
+          className="absolute right-3 top-3 text-[10px] text-ink-faint opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          ↗
+        </span>
       </button>
     );
   }
-  return <div className="bg-white p-4 dark:bg-zinc-950">{inner}</div>;
+  return <div className="bg-paper-2 p-4">{inner}</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +84,7 @@ export function WindTile({
       <div className="flex items-center gap-2">
         <DirectionNeedle directionDeg={avgDeg} size={36} />
         <div className="leading-tight">
-          <div className="font-mono text-2xl font-bold tracking-tight">
+          <div className="headline font-mono text-3xl text-ink">
             {cardinalDirection(avgDeg)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-zinc-500">
@@ -105,7 +114,7 @@ export function AirTempTile({
   const sub = showSpotName ? `at ${item.spot.name}` : undefined;
   return (
     <Tile label="Air temp" sub={sub} onClick={onClick}>
-      <span className="font-mono text-2xl font-bold tracking-tight">
+      <span className="headline font-mono text-3xl text-ink">
         {Math.round(avg)}°C
       </span>
     </Tile>
@@ -113,47 +122,72 @@ export function AirTempTile({
 }
 
 export function PeakWindowTile({
-  dayItems,
+  // dayItems was used to surface "strongest gust at spot X" across all
+  // spots. New design ditches that in favour of in-window stats for
+  // *this* spot, mirroring the Conditions hero. The prop stays for
+  // call-site compatibility but is unused.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  dayItems: _dayItems = [],
   item,
-  showSpotName = true,
   onClick,
 }: {
-  // The set of spots considered for "strongest gust" subtitle. On the
-  // dashboard this is every NL spot; on the per-spot page it's just one.
-  dayItems: SpotWithVerdict[];
+  dayItems?: SpotWithVerdict[];
   item: SpotWithVerdict | null;
   showSpotName?: boolean;
   onClick?: () => void;
 }) {
   if (!item) return <Tile label="Peak window">—</Tile>;
   const window = longestRideableRun(item);
-  let peakGustMs = 0;
-  let peakGustSpotName: string | null = null;
-  for (const v of dayItems) {
-    for (const h of v.hours) {
-      if (h.gustMs > peakGustMs) {
-        peakGustMs = h.gustMs;
-        peakGustSpotName = v.spot.name;
-      }
-    }
-  }
-  const sub = peakGustSpotName
-    ? showSpotName
-      ? `gust ${Math.round(msToKnots(peakGustMs))} kn at ${peakGustSpotName}`
-      : `gust ${Math.round(msToKnots(peakGustMs))} kn`
-    : undefined;
   if (!window) {
     return (
-      <Tile label="Peak window" sub={sub} onClick={onClick}>
+      <Tile label="Peak window" onClick={onClick}>
         —
       </Tile>
     );
   }
+
+  // Mean wind / gust within the peak-window hours of this spot. Same
+  // shape as the Conditions hero so the eye picks up the parallel.
+  let windSum = 0;
+  let gustSum = 0;
+  let n = 0;
+  for (const h of item.hours) {
+    const localHour = nlLocalHour(new Date(h.time));
+    if (localHour >= window.startHour && localHour < window.endHour) {
+      windSum += h.windSpeedMs;
+      gustSum += h.gustMs;
+      n++;
+    }
+  }
+  const windKn = n > 0 ? Math.round(msToKnots(windSum / n)) : null;
+  const gustKn = n > 0 ? Math.round(msToKnots(gustSum / n)) : null;
+
   return (
-    <Tile label="Peak window" sub={sub} onClick={onClick}>
-      <span className="font-mono text-2xl font-bold tracking-tight">
-        {pad2(window.startHour)}–{pad2(window.endHour)}h
-      </span>
+    <Tile label="Peak window" onClick={onClick}>
+      <div className="leading-none">
+        <div className="headline font-mono text-2xl text-ink">
+          {pad2(window.startHour)}:00 – {pad2(window.endHour)}:00
+        </div>
+        {windKn !== null && gustKn !== null ? (
+          <>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <span className="font-mono text-base font-bold text-ink-2">
+                {windKn}
+              </span>
+              <span className="font-mono text-sm font-light text-ink-faint">/</span>
+              <span className="font-mono text-base font-bold text-ink-2">
+                {gustKn}
+              </span>
+              <span className="ml-1 font-mono text-[9px] uppercase tracking-wider text-ink-mute">
+                kn
+              </span>
+            </div>
+            <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.2em] text-ink-mute">
+              wind · gusts
+            </p>
+          </>
+        ) : null}
+      </div>
     </Tile>
   );
 }
@@ -161,9 +195,11 @@ export function PeakWindowTile({
 export function DaylightTile({
   item,
   selectedDate,
+  onClick,
 }: {
   item: SpotWithVerdict | null;
   selectedDate: string;
+  onClick?: () => void;
 }) {
   if (!item) return <Tile label="Daylight">—</Tile>;
   const { sunrise, sunset } = getSunTimes(
@@ -175,8 +211,8 @@ export function DaylightTile({
   const hours = Math.floor(lengthMs / 3600000);
   const minutes = Math.floor((lengthMs % 3600000) / 60000);
   return (
-    <Tile label="Daylight" sub={`${hours}h ${minutes}m`}>
-      <span className="font-mono text-2xl font-bold tracking-tight">
+    <Tile label="Daylight" sub={`${hours}h ${minutes}m`} onClick={onClick}>
+      <span className="headline font-mono text-3xl text-ink">
         {fmtNlClock(sunrise)} → {fmtNlClock(sunset)}
       </span>
     </Tile>
@@ -197,14 +233,14 @@ export function TrendTile({
   const arrow = trend === "rising" ? "↑" : trend === "dropping" ? "↓" : "→";
   const accent =
     trend === "rising"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-go-strong"
       : trend === "dropping"
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-zinc-700 dark:text-zinc-300";
+        ? "text-maybe"
+        : "text-ink";
   const sub = showSpotName ? `at ${item.spot.name}` : undefined;
   return (
     <Tile label="Trend" sub={sub} onClick={onClick}>
-      <span className={`font-mono text-2xl font-bold tracking-tight ${accent}`}>
+      <span className={`headline font-mono text-3xl ${accent}`}>
         {arrow} {labelForTrend(trend)}
       </span>
     </Tile>

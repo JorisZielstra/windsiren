@@ -12,7 +12,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   dbRowToSpot,
   fetchSpotWeek,
+  getUserPrefs,
   peakWindMs,
+  prefsToThresholds,
   type SpotWithVerdict,
 } from "@windsiren/core";
 import {
@@ -21,6 +23,7 @@ import {
   type SpotRegion,
 } from "@windsiren/shared";
 import { VerdictPill } from "../../components/VerdictPill";
+import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
 const DIRECTIONS: { label: string; deg: number }[] = [
@@ -43,6 +46,13 @@ const REGIONS: { value: SpotRegion; label: string }[] = [
 ];
 
 type TideFilter = "any" | "only_tide" | "only_no_tide";
+type SortKey = "verdict" | "wind" | "name";
+
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: "verdict", label: "Best today" },
+  { value: "wind", label: "Strongest wind" },
+  { value: "name", label: "A → Z" },
+];
 
 export default function SpotsScreen() {
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
@@ -50,6 +60,9 @@ export default function SpotsScreen() {
   const [selectedDirs, setSelectedDirs] = useState<Set<number>>(new Set());
   const [tideFilter, setTideFilter] = useState<TideFilter>("any");
   const [regionFilter, setRegionFilter] = useState<SpotRegion | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("verdict");
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
   useFocusEffect(
     useCallback(() => {
@@ -68,7 +81,12 @@ export default function SpotsScreen() {
         }
         const spots = (rows ?? []).map(dbRowToSpot);
         const todayKey = nlLocalDateKey(new Date());
-        const weeks = await Promise.all(spots.map((s) => fetchSpotWeek(s, 1)));
+        const userPrefs = await getUserPrefs(supabase, userId);
+        if (cancelled) return;
+        const userThresholds = prefsToThresholds(userPrefs);
+        const weeks = await Promise.all(
+          spots.map((s) => fetchSpotWeek(s, 1, userThresholds)),
+        );
         if (cancelled) return;
         const todayItems: SpotWithVerdict[] = weeks.map((week) => {
           const today = week.days.find((d) => d.dateKey === todayKey) ?? week.days[0];
@@ -83,7 +101,7 @@ export default function SpotsScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [userId]),
   );
 
   const sorted = useMemo(() => {
@@ -107,11 +125,19 @@ export default function SpotsScreen() {
       return 0;
     };
     return [...filtered].sort((a, b) => {
+      if (sortKey === "name") return a.spot.name.localeCompare(b.spot.name);
+      if (sortKey === "wind") {
+        const peakA = peakWindMs(a.hours) ?? -1;
+        const peakB = peakWindMs(b.hours) ?? -1;
+        const d = peakB - peakA;
+        if (d !== 0) return d;
+        return a.spot.name.localeCompare(b.spot.name);
+      }
       const d = score(b) - score(a);
       if (d !== 0) return d;
       return a.spot.name.localeCompare(b.spot.name);
     });
-  }, [items, selectedDirs, tideFilter, regionFilter]);
+  }, [items, selectedDirs, tideFilter, regionFilter, sortKey]);
 
   const filtersActive =
     selectedDirs.size > 0 || tideFilter !== "any" || regionFilter !== null;
@@ -190,6 +216,16 @@ export default function SpotsScreen() {
                   label={r.label}
                   active={regionFilter === r.value}
                   onPress={() => setRegionFilter(r.value)}
+                />
+              ))}
+            </FilterRow>
+            <FilterRow label="Sort by">
+              {SORTS.map((s) => (
+                <Chip
+                  key={s.value}
+                  label={s.label}
+                  active={sortKey === s.value}
+                  onPress={() => setSortKey(s.value)}
                 />
               ))}
             </FilterRow>

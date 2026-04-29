@@ -18,3 +18,6 @@ export * from "./wind-trend";
 export * from "./day-verdicts";
 export * from "./hour-buckets";
 export * from "./monthly-sessions";
+export * from "./past-hours";
+export * from "./preferences";
+export * from "./session-tracking";

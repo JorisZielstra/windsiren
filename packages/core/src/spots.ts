@@ -52,10 +52,13 @@ export function dbRowToSpot(row: SpotRow): Spot {
   };
 }
 
-export async function fetchTodayVerdict(spot: Spot): Promise<SpotWithVerdict> {
+export async function fetchTodayVerdict(
+  spot: Spot,
+  thresholds: ThresholdProfile = DEFAULT_THRESHOLDS,
+): Promise<SpotWithVerdict> {
   try {
     const hours = await forecaster.fetchHourly(spot.lat, spot.lng, 1);
-    const verdict = evaluateDay({ spot, hours, thresholds: DEFAULT_THRESHOLDS });
+    const verdict = evaluateDay({ spot, hours, thresholds });
     return { spot, verdict, hours };
   } catch {
     return { spot, verdict: null, hours: [] };

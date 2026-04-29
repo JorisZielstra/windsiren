@@ -59,6 +59,12 @@ export default async function ProfilePage() {
         >
           Edit profile
         </Link>
+        <Link
+          href="/profile/preferences"
+          className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:border-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-500"
+        >
+          Kite preferences
+        </Link>
         <form action="/auth/sign-out" method="post">
           <button
             type="submit"

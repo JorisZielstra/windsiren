@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect } from "react";
 import {
   averageDirectionDeg,
+  bucketHours,
+  getSunTimes,
   type FriendsOnWaterToday,
   type PublicProfile,
   type SpotWeek,
@@ -14,18 +16,20 @@ import {
   DEFAULT_THRESHOLDS,
   isHourRideable,
   msToKnots,
+  windKnColor,
   type HourlyForecast,
   type Spot,
 } from "@windsiren/shared";
-import { DirectionNeedle } from "@/components/DirectionNeedle";
-
 export type TileKey =
   | "score"
   | "wind"
   | "airTemp"
   | "friends"
   | "peakWindow"
-  | "trend";
+  | "trend"
+  | "daylight"
+  | "verdict"
+  | "goSpots";
 
 type Props = {
   tile: TileKey | null;
@@ -95,7 +99,7 @@ export function TileModal({
               selectedDate={selectedDate}
             />
           ) : tile === "wind" ? (
-            <WindPolarChart bestSpot={bestSpot} />
+            <WindRoseChart bestSpot={bestSpot} />
           ) : tile === "airTemp" ? (
             <HourlyLineChart
               hours={bestSpot?.hours ?? []}
@@ -123,6 +127,20 @@ export function TileModal({
               showHalfAverages
               accent="#10b981"
             />
+          ) : tile === "verdict" ? (
+            <HourlyLineChart
+              hours={bestSpot?.hours ?? []}
+              valueOf={(h) => msToKnots(h.windSpeedMs)}
+              gustOf={(h) => msToKnots(h.gustMs)}
+              unit="kn"
+              spot={bestSpot?.spot}
+              shadeRideable
+              accent="#10b981"
+            />
+          ) : tile === "daylight" ? (
+            <SunArcChart bestSpot={bestSpot} selectedDate={selectedDate} />
+          ) : tile === "goSpots" ? (
+            <GoSpotsList dayItems={dayItems} />
           ) : tile === "friends" ? (
             <FriendsTimeline friends={friends} />
           ) : null}
@@ -278,44 +296,126 @@ function WeekScoreSpark({
 }
 
 // ---------------------------------------------------------------------------
-// Wind polar chart — hourly direction around a circle
+// Wind rose — 2-hour buckets drawn as arrows, length proportional to wind kn
 // ---------------------------------------------------------------------------
 
-function WindPolarChart({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
+function WindRoseChart({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
   if (!bestSpot) return <NoData />;
   const daylight = daylightHoursOf(bestSpot.hours);
   if (daylight.length === 0) return <NoData />;
+  const buckets = bucketHours(daylight, bestSpot.spot, 2);
   const avg = averageDirectionDeg(daylight.map((h) => h.windDirectionDeg));
 
+  const size = 280;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = size / 2 - 24; // ring radius
+  const maxKn = Math.max(
+    1,
+    ...buckets.map((b) => msToKnots(b.windSpeedMs)),
+  );
+
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-8">
+    <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start">
       <div className="shrink-0">
-        <DirectionNeedle directionDeg={avg} size={180} />
+        <svg viewBox={`0 0 ${size} ${size}`} className="h-72 w-72">
+          {/* Compass rings */}
+          {[0.33, 0.66, 1].map((t) => (
+            <circle
+              key={t}
+              cx={cx}
+              cy={cy}
+              r={rOuter * t}
+              fill="none"
+              className="stroke-zinc-200 dark:stroke-zinc-800"
+            />
+          ))}
+          {/* Compass labels */}
+          {[
+            { dir: 0, label: "N" },
+            { dir: 90, label: "E" },
+            { dir: 180, label: "S" },
+            { dir: 270, label: "W" },
+          ].map(({ dir, label }) => {
+            const { x, y } = polar(cx, cy, rOuter + 12, dir);
+            return (
+              <text
+                key={label}
+                x={x}
+                y={y + 3}
+                textAnchor="middle"
+                className="fill-zinc-500 text-[10px] font-semibold"
+              >
+                {label}
+              </text>
+            );
+          })}
+
+          {/* Per-2h arrows: length = wind speed, color = wind kn scale.
+              Arrow points TOWARDS the direction the wind is coming FROM
+              — meteorological convention, matching the spot-page wind
+              rose needle. So a 270° (westerly) wind gets an arrow
+              reaching toward W. */}
+          {buckets.map((b) => {
+            const kn = msToKnots(b.windSpeedMs);
+            const len = (kn / maxKn) * rOuter * 0.92;
+            const bearing = b.windDirectionDeg;
+            const head = polar(cx, cy, len, bearing);
+            const tint = windKnColor(kn);
+            return (
+              <g key={b.startTime}>
+                <line
+                  x1={cx}
+                  y1={cy}
+                  x2={head.x}
+                  y2={head.y}
+                  stroke={tint.bg}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                />
+                {/* Arrow head — 8px triangle pointing along the bearing */}
+                <ArrowHead from={polar(cx, cy, len - 6, bearing)} bearing={bearing} color={tint.bg} />
+                {/* Time tick on the outer ring at the same bearing */}
+                <text
+                  x={polar(cx, cy, rOuter + 4, bearing).x}
+                  y={polar(cx, cy, rOuter + 4, bearing).y + 3}
+                  textAnchor="middle"
+                  className="fill-zinc-400 text-[8px] font-mono"
+                >
+                  {pad2(b.startLocalHour)}h
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Centre dot + average needle */}
+          <circle cx={cx} cy={cy} r={4} className="fill-zinc-700 dark:fill-zinc-300" />
+        </svg>
         <div className="mt-2 text-center">
-          <div className="font-mono text-2xl font-bold">{cardinalDirection(avg)}</div>
-          <div className="text-xs text-zinc-500">{Math.round(avg)}° avg</div>
+          <div className="font-mono text-xl font-bold">{cardinalDirection(avg)}</div>
+          <div className="text-xs text-zinc-500">{Math.round(avg)}° avg · arrows show 2h windows</div>
         </div>
       </div>
       <div className="flex-1">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Hourly direction
-        </h3>
-        <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-          {daylight.map((h) => {
-            const localHour = nlLocalHour(new Date(h.time));
-            const knots = Math.round(msToKnots(h.windSpeedMs));
+        <ul className="space-y-2">
+          {buckets.map((b) => {
+            const knots = Math.round(msToKnots(b.windSpeedMs));
+            const tint = windKnColor(knots);
             return (
-              <li key={h.time} className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-xs text-zinc-500">
-                  {pad2(localHour)}:00
+              <li
+                key={b.startTime}
+                className="flex items-center gap-4 rounded-lg border border-border bg-paper-2 px-4 py-2.5"
+              >
+                <span className="w-20 font-mono text-sm font-semibold text-ink">
+                  {pad2(b.startLocalHour)}–{pad2(b.startLocalHour + 2)}h
                 </span>
-                <span className="font-medium">
-                  {cardinalDirection(h.windDirectionDeg)}{" "}
-                  <span className="text-xs text-zinc-500">
-                    {Math.round(h.windDirectionDeg)}°
-                  </span>
+                <MiniRose bearing={b.windDirectionDeg} tint={tint.bg} />
+                <span
+                  className="ml-auto rounded-md px-3 py-1.5 font-mono text-base font-bold tabular-nums"
+                  style={{ backgroundColor: tint.bg, color: tint.fg }}
+                >
+                  {knots} kn
                 </span>
-                <span className="font-mono text-xs text-zinc-500">{knots}kn</span>
               </li>
             );
           })}
@@ -323,6 +423,251 @@ function WindPolarChart({ bestSpot }: { bestSpot: SpotWithVerdict | null }) {
       </div>
     </div>
   );
+}
+
+// Per-row mini wind rose. Compass ring with N/E/S/W ticks and a single
+// short arrow pointing TOWARDS the wind source — same convention as
+// the spot-page WindRose. Replaces the "ENE 70°" text per row so the
+// direction reads at a glance instead of forcing the eye through a
+// degrees-to-cardinal mental conversion.
+function MiniRose({ bearing, tint }: { bearing: number; tint: string }) {
+  const size = 44;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = size / 2 - 4;
+  const head = polar(cx, cy, rOuter * 0.85, bearing);
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="h-11 w-11 shrink-0">
+      <circle
+        cx={cx}
+        cy={cy}
+        r={rOuter}
+        fill="none"
+        className="stroke-border-strong"
+        strokeWidth={1}
+      />
+      {[0, 90, 180, 270].map((deg) => {
+        const inner = polar(cx, cy, rOuter - 3, deg);
+        const outer = polar(cx, cy, rOuter, deg);
+        return (
+          <line
+            key={deg}
+            x1={inner.x}
+            y1={inner.y}
+            x2={outer.x}
+            y2={outer.y}
+            className="stroke-ink-faint"
+            strokeWidth={1}
+          />
+        );
+      })}
+      <line
+        x1={cx}
+        y1={cy}
+        x2={head.x}
+        y2={head.y}
+        stroke={tint}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+      />
+      <ArrowHead
+        from={polar(cx, cy, rOuter * 0.85 - 5, bearing)}
+        bearing={bearing}
+        color={tint}
+      />
+      <circle cx={cx} cy={cy} r={1.5} className="fill-ink-2" />
+    </svg>
+  );
+}
+
+function polar(cx: number, cy: number, r: number, bearingDeg: number) {
+  // 0° = N (up). Convert compass bearing to SVG angle (0° at +x axis, CW).
+  const a = ((bearingDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+}
+
+function ArrowHead({
+  from,
+  bearing,
+  color,
+}: {
+  from: { x: number; y: number };
+  bearing: number;
+  color: string;
+}) {
+  // Triangle whose tip extends 6px further along bearing.
+  const tip = {
+    x: from.x + 6 * Math.cos(((bearing - 90) * Math.PI) / 180),
+    y: from.y + 6 * Math.sin(((bearing - 90) * Math.PI) / 180),
+  };
+  const left = {
+    x: from.x + 4 * Math.cos((((bearing - 90) - 130) * Math.PI) / 180),
+    y: from.y + 4 * Math.sin((((bearing - 90) - 130) * Math.PI) / 180),
+  };
+  const right = {
+    x: from.x + 4 * Math.cos((((bearing - 90) + 130) * Math.PI) / 180),
+    y: from.y + 4 * Math.sin((((bearing - 90) + 130) * Math.PI) / 180),
+  };
+  return (
+    <polygon
+      points={`${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`}
+      fill={color}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sun-arc chart — semicircle from sunrise to sunset with current sun marker
+// ---------------------------------------------------------------------------
+
+function SunArcChart({
+  bestSpot,
+  selectedDate,
+}: {
+  bestSpot: SpotWithVerdict | null;
+  selectedDate: string;
+}) {
+  if (!bestSpot) return <NoData />;
+  const noon = new Date(`${selectedDate}T12:00:00Z`);
+  const { sunrise, sunset } = getSunTimes(bestSpot.spot.lat, bestSpot.spot.lng, noon);
+  const lengthMs = sunset.getTime() - sunrise.getTime();
+  const hours = Math.floor(lengthMs / 3600000);
+  const minutes = Math.floor((lengthMs % 3600000) / 60000);
+
+  // Solar noon = midpoint between sunrise and sunset.
+  const solarNoon = new Date((sunrise.getTime() + sunset.getTime()) / 2);
+  // Now-marker: current time clamped to [sunrise, sunset].
+  const nowMs = Date.now();
+  const showNow = nowMs >= sunrise.getTime() && nowMs <= sunset.getTime();
+
+  // Layout
+  const w = 560;
+  const h = 240;
+  const padX = 40;
+  const baseY = h - 36;
+  const r = (w - padX * 2) / 2;
+
+  // f=0 at sunrise, f=1 at sunset; sin(πf) traces the arc.
+  const point = (t: number) => {
+    const f = (t - sunrise.getTime()) / lengthMs;
+    const x = padX + f * (w - padX * 2);
+    const y = baseY - Math.sin(f * Math.PI) * r;
+    return { x, y };
+  };
+
+  // Build the arc as a quadratic curve from sunrise → solarNoon → sunset.
+  const p0 = point(sunrise.getTime());
+  const pPeak = point(solarNoon.getTime());
+  const p1 = point(sunset.getTime());
+  // Quadratic Bézier: control point above the noon point so the curve
+  // peaks at pPeak. For a sin curve f→sin(πf)·r the visual peak is at
+  // y=baseY-r so we derive the control point from that.
+  const ctrlY = 2 * pPeak.y - (p0.y + p1.y) / 2;
+  const arcPath = `M ${p0.x} ${p0.y} Q ${pPeak.x} ${ctrlY} ${p1.x} ${p1.y}`;
+
+  const nowPoint = showNow ? point(nowMs) : null;
+
+  return (
+    <div className="space-y-4">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-60 w-full">
+        {/* Horizon */}
+        <line
+          x1={padX - 10}
+          y1={baseY}
+          x2={w - padX + 10}
+          y2={baseY}
+          className="stroke-zinc-300 dark:stroke-zinc-700"
+          strokeWidth={1.5}
+        />
+        {/* Arc */}
+        <path
+          d={arcPath}
+          fill="none"
+          className="stroke-amber-400 dark:stroke-amber-300"
+          strokeWidth={3}
+          strokeLinecap="round"
+        />
+        {/* Sunrise + sunset markers */}
+        <circle cx={p0.x} cy={p0.y} r={5} className="fill-amber-500" />
+        <circle cx={p1.x} cy={p1.y} r={5} className="fill-amber-500" />
+        {/* Solar noon marker */}
+        <circle cx={pPeak.x} cy={pPeak.y} r={4} className="fill-amber-300 dark:fill-amber-200" />
+        {/* Now marker (sun glyph) */}
+        {nowPoint ? (
+          <g>
+            <circle cx={nowPoint.x} cy={nowPoint.y} r={9} className="fill-amber-400" />
+            <circle cx={nowPoint.x} cy={nowPoint.y} r={9} fill="none" className="stroke-amber-600" strokeWidth={1.5} />
+          </g>
+        ) : null}
+        {/* Labels under the horizon */}
+        <text
+          x={p0.x}
+          y={baseY + 18}
+          textAnchor="middle"
+          className="fill-zinc-700 font-mono text-xs dark:fill-zinc-300"
+        >
+          {fmtClock(sunrise)}
+        </text>
+        <text
+          x={p0.x}
+          y={baseY + 32}
+          textAnchor="middle"
+          className="fill-zinc-500 text-[10px]"
+        >
+          sunrise
+        </text>
+        <text
+          x={p1.x}
+          y={baseY + 18}
+          textAnchor="middle"
+          className="fill-zinc-700 font-mono text-xs dark:fill-zinc-300"
+        >
+          {fmtClock(sunset)}
+        </text>
+        <text
+          x={p1.x}
+          y={baseY + 32}
+          textAnchor="middle"
+          className="fill-zinc-500 text-[10px]"
+        >
+          sunset
+        </text>
+        <text
+          x={pPeak.x}
+          y={pPeak.y - 12}
+          textAnchor="middle"
+          className="fill-zinc-500 font-mono text-[10px]"
+        >
+          {fmtClock(solarNoon)}
+        </text>
+      </svg>
+
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        <Stat label="Daylight" value={`${hours}h ${minutes}m`} />
+        <Stat label="Sunrise" value={fmtClock(sunrise)} />
+        <Stat label="Solar noon" value={fmtClock(solarNoon)} />
+        <Stat label="Sunset" value={fmtClock(sunset)} />
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className="font-mono text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function fmtClock(d: Date): string {
+  return new Intl.DateTimeFormat("en-NL", {
+    timeZone: "Europe/Amsterdam",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
 }
 
 // ---------------------------------------------------------------------------
@@ -558,6 +903,77 @@ function HourlyLineChart({
 }
 
 // ---------------------------------------------------------------------------
+// GO spots list — kiters tap "X spots are GO!" on the dashboard and
+// land here. Filtered to verdict=go for the selected day, sorted by
+// rideable hours so the most-promising spot floats to the top. Each
+// row is a Link → /spots/[slug] with peak-wind context so the user
+// can decide quickly without opening every spot page.
+// ---------------------------------------------------------------------------
+
+function GoSpotsList({ dayItems }: { dayItems: SpotWithVerdict[] }) {
+  const goSpots = dayItems
+    .filter((d) => d.verdict?.decision === "go")
+    .map((d) => {
+      const rideable = d.hours.filter((h) =>
+        isHourRideable(h, d.spot, DEFAULT_THRESHOLDS),
+      ).length;
+      let peakWindMs = 0;
+      let peakGustMs = 0;
+      let peakDirDeg = 0;
+      for (const h of d.hours) {
+        if (h.windSpeedMs > peakWindMs) {
+          peakWindMs = h.windSpeedMs;
+          peakDirDeg = h.windDirectionDeg;
+        }
+        if (h.gustMs > peakGustMs) peakGustMs = h.gustMs;
+      }
+      return { item: d, rideable, peakWindMs, peakGustMs, peakDirDeg };
+    })
+    .sort((a, b) => b.rideable - a.rideable);
+
+  if (goSpots.length === 0) {
+    return (
+      <p className="text-sm text-zinc-500">
+        Nothing's GO right now. Tap the day strip to scan another day.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {goSpots.map(({ item, rideable, peakWindMs, peakGustMs, peakDirDeg }) => {
+        const tint = windKnColor(msToKnots(peakWindMs));
+        return (
+          <li key={item.spot.id}>
+            <Link
+              href={`/spots/${item.spot.slug}`}
+              className="block rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 transition-colors hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:border-emerald-700 dark:hover:bg-emerald-950"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-semibold">{item.spot.name}</span>
+                <span
+                  className="rounded-md px-2 py-0.5 font-mono text-xs"
+                  style={{ backgroundColor: tint.bg, color: tint.fg }}
+                >
+                  peak {Math.round(msToKnots(peakWindMs))} kn / {Math.round(msToKnots(peakGustMs))}
+                </span>
+              </div>
+              <div className="mt-0.5 flex items-baseline justify-between gap-3 text-xs text-zinc-600 dark:text-zinc-400">
+                <span>
+                  {cardinalDirection(peakDirDeg)} ·{" "}
+                  <span className="font-mono">{rideable}h GO</span>
+                </span>
+                <span className="text-emerald-700 dark:text-emerald-400">Open →</span>
+              </div>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Friends timeline (list, not chart)
 // ---------------------------------------------------------------------------
 
@@ -611,16 +1027,22 @@ function labelForTile(tile: TileKey): string {
     friends: "Friends on the water",
     peakWindow: "Peak window",
     trend: "Wind trend",
+    daylight: "Daylight",
+    verdict: "Verdict",
+    goSpots: "GO spots",
   }[tile];
 }
 
 function titleForTile(tile: TileKey, bestSpot: SpotWithVerdict | null): string {
   if (tile === "score") return "Score breakdown";
   const at = bestSpot ? ` · ${bestSpot.spot.name}` : "";
-  if (tile === "wind") return `Hourly direction${at}`;
+  if (tile === "wind") return `Wind rose${at}`;
   if (tile === "airTemp") return `Hourly temperature${at}`;
   if (tile === "peakWindow") return `Hourly wind${at}`;
   if (tile === "trend") return `Wind trend${at}`;
+  if (tile === "daylight") return `Sun arc${at}`;
+  if (tile === "verdict") return `Hourly wind${at}`;
+  if (tile === "goSpots") return "Where it's GO";
   return "Today's friends";
 }
 

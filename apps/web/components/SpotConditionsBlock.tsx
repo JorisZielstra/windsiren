@@ -13,11 +13,13 @@ import {
 import {
   addDaysToKey,
   countRideable,
+  daylightHours,
   mondayOfDate,
   weekDates,
 } from "@/components/dashboard-utils";
 import { TileModal, type TileKey } from "@/components/TileModal";
-import { WeekStrip } from "@/components/WeekStrip";
+import { WeekStrip, type WeekScoreEntry } from "@/components/WeekStrip";
+import { msToKnots } from "@windsiren/shared";
 
 type Props = {
   spotWeek: SpotWeek;
@@ -25,6 +27,9 @@ type Props = {
   // When true, drop the outer rounded border — used when nested inside
   // a parent card that already provides it (e.g. spot detail page).
   flush?: boolean;
+  // When true, the inner "Conditions for X" header is hidden — useful when
+  // an outer collapsible has already taken over the title bar.
+  headless?: boolean;
 };
 
 // Per-spot version of the home dashboard's tile grid + week strip. Lives
@@ -35,7 +40,12 @@ type Props = {
 // Per-day score formula (different from the dashboard's "% of NL spots
 // GO"): rideable-hours / 13 × 100. 13 is the max NL daylight hours
 // (08:00–20:00 local), so a banger day caps at 100.
-export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props) {
+export function SpotConditionsBlock({
+  spotWeek,
+  todayKey,
+  flush = false,
+  headless = false,
+}: Props) {
   const dateKeys = useMemo(
     () => spotWeek.days.map((d) => d.dateKey).sort(),
     [spotWeek],
@@ -60,12 +70,10 @@ export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props
   const dayItems = useMemo(() => [dayItem], [dayItem]);
 
   // Per-day score map for the WeekStrip. Tracks rideable hours so the
-  // bar coloring matches the dashboard's tier accents.
+  // headline number matches the per-spot scoring; bar color comes from
+  // the day's avg wind, same Windguru palette as the forecast table.
   const weekScores = useMemo(() => {
-    const out = new Map<
-      string,
-      { score: number; goCount: number; total: number }
-    >();
+    const out = new Map<string, WeekScoreEntry>();
     for (const day of spotWeek.days) {
       const rideable = countRideable({
         spot: spotWeek.spot,
@@ -73,10 +81,21 @@ export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props
         hours: day.hours,
       });
       const score = Math.round((Math.min(13, rideable) / 13) * 100);
+      const daylight = daylightHours(day.hours);
+      const avgWindKn =
+        daylight.length > 0
+          ? Math.round(
+              msToKnots(
+                daylight.reduce((s, h) => s + h.windSpeedMs, 0) /
+                  daylight.length,
+              ),
+            )
+          : null;
       out.set(day.dateKey, {
         score,
         goCount: rideable >= 3 ? 1 : 0,
         total: 1,
+        avgWindKn,
       });
     }
     return out;
@@ -86,19 +105,23 @@ export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props
     <section
       className={[
         "bg-white dark:bg-zinc-950",
-        flush
-          ? "border-t border-zinc-100 dark:border-zinc-900"
-          : "rounded-xl border border-zinc-200 dark:border-zinc-800",
+        headless
+          ? ""
+          : flush
+            ? "border-t border-zinc-100 dark:border-zinc-900"
+            : "rounded-xl border border-zinc-200 dark:border-zinc-800",
       ].join(" ")}
     >
-      <div className="px-6 pt-5 pb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          Conditions for {spotWeek.spot.name}
-        </p>
-        <p className="mt-1 text-xs text-zinc-500">
-          Tap a day to pivot · tap a tile for hourly chart
-        </p>
-      </div>
+      {headless ? null : (
+        <div className="px-6 pt-5 pb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+            Conditions for {spotWeek.spot.name}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Tap a day to pivot · tap a tile for hourly chart
+          </p>
+        </div>
+      )}
 
       <WeekStrip
         visibleDates={weekDates(mondayOfDate(selectedDate))}
@@ -128,7 +151,7 @@ export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props
       />
 
       <div className="grid grid-cols-1 gap-px border-t border-zinc-100 bg-zinc-100 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-900 dark:bg-zinc-900">
-        <VerdictTile item={dayItem} />
+        <VerdictTile item={dayItem} onClick={() => setActiveTile("verdict")} />
         <WindTile item={dayItem} onClick={() => setActiveTile("wind")} />
         <AirTempTile
           item={dayItem}
@@ -141,7 +164,11 @@ export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props
           showSpotName={false}
           onClick={() => setActiveTile("peakWindow")}
         />
-        <DaylightTile item={dayItem} selectedDate={selectedDate} />
+        <DaylightTile
+          item={dayItem}
+          selectedDate={selectedDate}
+          onClick={() => setActiveTile("daylight")}
+        />
         <TrendTile
           item={dayItem}
           showSpotName={false}
@@ -162,10 +189,16 @@ export function SpotConditionsBlock({ spotWeek, todayKey, flush = false }: Props
   );
 }
 
-// Read-only verdict headline for the selected day. The home dashboard's
-// score tile is multi-spot; this is the per-spot equivalent that pairs
-// the GO/MAYBE/NO_GO badge with the rideable-hour count.
-function VerdictTile({ item }: { item: SpotWithVerdict }) {
+// Verdict headline for the selected day. Click opens the same hourly
+// wind chart as Peak window so kiters can see *where* the rideable hours
+// fall, not just their count.
+function VerdictTile({
+  item,
+  onClick,
+}: {
+  item: SpotWithVerdict;
+  onClick?: () => void;
+}) {
   const decision = item.verdict?.decision ?? null;
   const rideable = countRideable(item);
   const label =
@@ -186,6 +219,7 @@ function VerdictTile({ item }: { item: SpotWithVerdict }) {
     <Tile
       label="Verdict"
       sub={`${rideable} rideable hour${rideable === 1 ? "" : "s"}`}
+      onClick={onClick}
     >
       <span className={`font-mono text-2xl font-bold tracking-tight ${accent}`}>
         {label}

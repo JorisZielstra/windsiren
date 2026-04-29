@@ -11,6 +11,7 @@ import {
   daylightHours,
   fmtNlClock,
   longestRideableRun,
+  nlLocalHour,
   pad2,
 } from "./dashboard-utils";
 import { DirectionNeedle } from "./DirectionNeedle";
@@ -104,45 +105,61 @@ export function AirTempTile({
 }
 
 export function PeakWindowTile({
-  dayItems,
+  // dayItems retained for call-site compatibility but unused — peak
+  // stats now come from the spot's own hours, mirroring web. See
+  // apps/web/components/DayTiles.tsx for rationale.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  dayItems: _dayItems = [],
   item,
-  showSpotName = true,
   onPress,
 }: {
-  dayItems: SpotWithVerdict[];
+  dayItems?: SpotWithVerdict[];
   item: SpotWithVerdict | null;
   showSpotName?: boolean;
   onPress?: () => void;
 }) {
   if (!item) return <Tile label="PEAK WINDOW">—</Tile>;
   const window = longestRideableRun(item);
-  let peakGustMs = 0;
-  let peakGustSpotName: string | null = null;
-  for (const v of dayItems) {
-    for (const h of v.hours) {
-      if (h.gustMs > peakGustMs) {
-        peakGustMs = h.gustMs;
-        peakGustSpotName = v.spot.name;
-      }
-    }
-  }
-  const sub = peakGustSpotName
-    ? showSpotName
-      ? `gust ${Math.round(msToKnots(peakGustMs))} kn at ${peakGustSpotName}`
-      : `gust ${Math.round(msToKnots(peakGustMs))} kn`
-    : undefined;
   if (!window) {
     return (
-      <Tile label="PEAK WINDOW" sub={sub} onPress={onPress}>
+      <Tile label="PEAK WINDOW" onPress={onPress}>
         —
       </Tile>
     );
   }
+
+  let windSum = 0;
+  let gustSum = 0;
+  let n = 0;
+  for (const h of item.hours) {
+    const localHour = nlLocalHour(new Date(h.time));
+    if (localHour >= window.startHour && localHour < window.endHour) {
+      windSum += h.windSpeedMs;
+      gustSum += h.gustMs;
+      n++;
+    }
+  }
+  const windKn = n > 0 ? Math.round(msToKnots(windSum / n)) : null;
+  const gustKn = n > 0 ? Math.round(msToKnots(gustSum / n)) : null;
+
   return (
-    <Tile label="PEAK WINDOW" sub={sub} onPress={onPress}>
-      <Text style={styles.tileValue}>
-        {pad2(window.startHour)}–{pad2(window.endHour)}h
-      </Text>
+    <Tile label="PEAK WINDOW" onPress={onPress}>
+      <View>
+        <Text style={styles.peakTime}>
+          {pad2(window.startHour)}:00 – {pad2(window.endHour)}:00
+        </Text>
+        {windKn !== null && gustKn !== null ? (
+          <>
+            <View style={styles.peakStatsRow}>
+              <Text style={styles.peakStatNum}>{windKn}</Text>
+              <Text style={styles.peakStatSep}>/</Text>
+              <Text style={styles.peakStatNum}>{gustKn}</Text>
+              <Text style={styles.peakStatUnit}> kn</Text>
+            </View>
+            <Text style={styles.peakStatCaption}>wind · gusts</Text>
+          </>
+        ) : null}
+      </View>
     </Tile>
   );
 }
@@ -150,9 +167,11 @@ export function PeakWindowTile({
 export function DaylightTile({
   item,
   selectedDate,
+  onPress,
 }: {
   item: SpotWithVerdict | null;
   selectedDate: string;
+  onPress?: () => void;
 }) {
   if (!item) return <Tile label="DAYLIGHT">—</Tile>;
   const { sunrise, sunset } = getSunTimes(
@@ -164,7 +183,7 @@ export function DaylightTile({
   const hours = Math.floor(lengthMs / 3600000);
   const minutes = Math.floor((lengthMs % 3600000) / 60000);
   return (
-    <Tile label="DAYLIGHT" sub={`${hours}h ${minutes}m`}>
+    <Tile label="DAYLIGHT" sub={`${hours}h ${minutes}m`} onPress={onPress}>
       <Text style={styles.tileValueSmall}>
         {fmtNlClock(sunrise)} → {fmtNlClock(sunset)}
       </Text>
@@ -242,4 +261,39 @@ const styles = StyleSheet.create({
   trendRising: { color: "#059669" },
   trendDropping: { color: "#d97706" },
   trendHolding: { color: "#3f3f46" },
+  peakTime: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+    color: "#0b2e3f",
+    fontVariant: ["tabular-nums"],
+  },
+  peakStatsRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 2,
+  },
+  peakStatNum: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#324a59",
+    fontVariant: ["tabular-nums"],
+  },
+  peakStatSep: { fontSize: 11, color: "#a7b2b9", marginHorizontal: 2 },
+  peakStatUnit: {
+    fontSize: 9,
+    color: "#6c7d88",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginLeft: 3,
+  },
+  peakStatCaption: {
+    marginTop: 2,
+    fontSize: 8,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+    color: "#6c7d88",
+    textTransform: "uppercase",
+  },
 });

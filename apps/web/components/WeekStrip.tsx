@@ -1,6 +1,17 @@
 "use client";
 
+import { windKnColor } from "@windsiren/shared";
 import { formatWeekdayDate } from "@/components/dashboard-utils";
+
+export type WeekScoreEntry = {
+  score: number;
+  goCount: number;
+  total: number;
+  // Average wind speed (knots) over the day's daylight hours, used to
+  // color the bar under each chip via the same Windguru palette as the
+  // forecast table. Null when we don't have hourly data for the day.
+  avgWindKn: number | null;
+};
 
 type Props = {
   // Exactly 7 dateKeys to render (Mon → Sun). Caller computes them
@@ -8,7 +19,7 @@ type Props = {
   visibleDates: string[];
   // Per-day stats. A missing entry means we don't have forecast data
   // for that day — chip renders as a muted "—" placeholder.
-  weekScores: Map<string, { score: number; goCount: number; total: number }>;
+  weekScores: Map<string, WeekScoreEntry>;
   selectedDate: string;
   todayKey: string;
   onSelect: (dateKey: string) => void;
@@ -31,7 +42,7 @@ export function WeekStrip({
 }: Props) {
   if (visibleDates.length === 0) return null;
   return (
-    <div className="flex items-stretch border-t border-zinc-100 dark:border-zinc-900">
+    <div className="flex items-stretch border-t border-border bg-paper">
       <CarouselButton
         direction="prev"
         onClick={onPrevWeek}
@@ -45,44 +56,51 @@ export function WeekStrip({
             const score = stats?.score ?? 0;
             const isSelected = dateKey === selectedDate;
             const isToday = dateKey === todayKey;
-            const accent = scoreAccentClasses(score, isSelected);
+            // Bar color: Windguru wind palette when we have wind data,
+            // selected-state white otherwise. Falls back to a neutral
+            // grey for days with no forecast at all.
+            const barTint =
+              !isSelected && hasData && stats!.avgWindKn !== null
+                ? windKnColor(stats!.avgWindKn)
+                : null;
             return (
               <button
                 key={dateKey}
                 type="button"
                 onClick={() => onSelect(dateKey)}
                 className={[
-                  "flex flex-col items-center rounded-md px-1 py-2 text-center transition-colors",
+                  "flex flex-col items-center rounded-lg px-1 py-2 text-center transition-all",
                   isSelected
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "hover:bg-zinc-100 dark:hover:bg-zinc-900",
+                    ? "bg-brand text-white shadow-sm"
+                    : "hover:bg-paper-sunk",
                   !hasData && !isSelected ? "opacity-50" : "",
                 ].join(" ")}
               >
                 <span
                   className={[
-                    "text-[10px] font-semibold leading-tight",
+                    "text-[10px] font-bold uppercase leading-tight tracking-[0.1em]",
                     isSelected
-                      ? "text-zinc-300 dark:text-zinc-600"
+                      ? "text-white/70"
                       : isToday
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-zinc-500",
+                        ? "text-go-strong"
+                        : "text-ink-mute",
                   ].join(" ")}
                 >
                   {isToday ? "Today" : formatWeekdayDate(dateKey)}
                 </span>
-                <span className="mt-1 font-mono text-base font-bold tabular-nums">
+                <span className="headline mt-1 font-mono text-lg tabular-nums">
                   {hasData ? score : "—"}
                 </span>
                 <span
                   className={[
                     "mt-1 h-1 w-6 rounded-full",
                     isSelected
-                      ? "bg-white/40 dark:bg-zinc-900/40"
-                      : hasData
-                        ? accent
-                        : "bg-zinc-200 dark:bg-zinc-800",
+                      ? "bg-white/40"
+                      : barTint
+                        ? ""
+                        : "bg-border-strong",
                   ].join(" ")}
+                  style={barTint ? { backgroundColor: barTint.bg } : undefined}
                 />
               </button>
             );
@@ -114,10 +132,8 @@ function CarouselButton({
       disabled={disabled}
       aria-label={direction === "prev" ? "Previous week" : "Next week"}
       className={[
-        "flex w-9 shrink-0 items-center justify-center text-zinc-500 transition-colors",
-        disabled
-          ? "opacity-30"
-          : "hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-900 dark:hover:text-zinc-100",
+        "flex w-9 shrink-0 items-center justify-center text-lg text-ink-mute transition-colors",
+        disabled ? "opacity-30" : "hover:bg-paper-sunk hover:text-ink",
       ].join(" ")}
     >
       {direction === "prev" ? "‹" : "›"}
@@ -125,10 +141,3 @@ function CarouselButton({
   );
 }
 
-function scoreAccentClasses(score: number, isSelected: boolean): string {
-  if (isSelected) return "";
-  if (score >= 70) return "bg-emerald-500 dark:bg-emerald-400";
-  if (score >= 40) return "bg-emerald-300 dark:bg-emerald-700";
-  if (score >= 20) return "bg-amber-300 dark:bg-amber-700";
-  return "bg-zinc-300 dark:bg-zinc-700";
-}

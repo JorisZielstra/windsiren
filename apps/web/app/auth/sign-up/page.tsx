@@ -47,14 +47,15 @@ export default function SignUpPage() {
   if (needsConfirmation) {
     return (
       <main className="mx-auto max-w-sm px-6 py-16">
-        <h1 className="text-2xl font-bold">Check your email</h1>
-        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
-          We sent a confirmation link to <strong>{email}</strong>. Click it to finish setting
-          up your account, then sign in.
+        <h1 className="headline text-3xl text-ink">Check your email</h1>
+        <p className="mt-3 text-ink-2">
+          We sent a confirmation link to{" "}
+          <strong className="text-ink">{email}</strong>. Click it to finish
+          setting up your account, then sign in.
         </p>
         <Link
           href="/auth/sign-in"
-          className="mt-6 inline-block text-sm underline"
+          className="mt-6 inline-block text-sm font-semibold text-brand-link hover:underline"
         >
           Back to sign in
         </Link>
@@ -64,24 +65,27 @@ export default function SignUpPage() {
 
   return (
     <main className="mx-auto max-w-sm px-6 py-16">
-      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+      <Link href="/" className="text-sm text-ink-mute hover:text-ink">
         ← Home
       </Link>
-      <h1 className="mt-4 text-3xl font-bold tracking-tight">Create account</h1>
+      <h1 className="headline mt-4 text-4xl text-ink">Create account</h1>
+      <p className="mt-2 text-sm text-ink-mute">
+        One-minute setup. We'll never email you about anything but the wind.
+      </p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block">
-          <span className="text-sm font-medium">Email</span>
+          <span className="text-sm font-semibold text-ink-2">Email</span>
           <input
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="mt-1.5 block w-full rounded-lg border border-border bg-paper-2 px-3 py-2 text-ink outline-none transition-colors focus:border-brand"
           />
         </label>
         <label className="block">
-          <span className="text-sm font-medium">Password</span>
+          <span className="text-sm font-semibold text-ink-2">Password</span>
           <input
             type="password"
             required
@@ -89,24 +93,29 @@ export default function SignUpPage() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="mt-1.5 block w-full rounded-lg border border-border bg-paper-2 px-3 py-2 text-ink outline-none transition-colors focus:border-brand"
           />
-          <span className="mt-1 block text-xs text-zinc-500">At least 6 characters.</span>
+          <span className="mt-1 block text-xs text-ink-mute">At least 6 characters.</span>
         </label>
         {error ? (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="rounded-lg border border-hazard/30 bg-hazard-soft px-3 py-2 text-sm text-hazard">
+            {error}
+          </p>
         ) : null}
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-strong disabled:opacity-50"
         >
           {busy ? "Creating…" : "Create account"}
         </button>
       </form>
-      <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-6 text-sm text-ink-mute">
         Already have an account?{" "}
-        <Link href="/auth/sign-in" className="underline">
+        <Link
+          href="/auth/sign-in"
+          className="font-semibold text-brand-link hover:underline"
+        >
           Sign in
         </Link>
       </p>

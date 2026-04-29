@@ -23,8 +23,10 @@ import {
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfiles,
+  getUserPrefs,
   peakWindMs,
   pickHeroSpot,
+  prefsToThresholds,
   type FeedItem,
   type FriendsOnWaterToday,
   type PublicProfile,
@@ -58,9 +60,13 @@ export default function SpotsListScreen() {
     count: 0,
     profiles: [],
   });
+  const [prefsSummary, setPrefsSummary] = useState<string | undefined>(undefined);
   const [feed, setFeed] = useState<FeedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [otherOpen, setOtherOpen] = useState(false);
+  // Bumped after the kiter mutates home spots inline from the dashboard
+  // so the focus-effect re-runs and homeSpotIds reflects the new set.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,10 +85,16 @@ export default function SpotsListScreen() {
         }
         const spots = (rows ?? []).map(dbRowToSpot);
         const todayKey = nlLocalDateKey(new Date());
+        // Resolve user's personal thresholds first so verdicts are
+        // personalized end-to-end.
+        const userPrefs = await getUserPrefs(supabase, user?.id ?? null);
+        if (cancelled) return;
+        const userThresholds = prefsToThresholds(userPrefs);
+        setPrefsSummary(summarizePrefs(userPrefs));
         const [weeks, favIds, homeIds, friends] = await Promise.all([
           // 16 days = Open-Meteo's free-tier max. Lets the WeekStrip
           // carousel show this week + ~2 weeks of future data.
-          Promise.all(spots.map((s) => fetchSpotWeek(s, 16))),
+          Promise.all(spots.map((s) => fetchSpotWeek(s, 16, userThresholds))),
           user ? fetchFavoriteSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
           user ? fetchHomeSpotIds(supabase, user.id) : Promise.resolve(new Set<string>()),
           user
@@ -149,7 +161,7 @@ export default function SpotsListScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user]),
+    }, [user, refreshKey]),
   );
 
   // Best across all NL today — anchors the "Other spots" collapsible exclusion.
@@ -193,6 +205,8 @@ export default function SpotsListScreen() {
               friendsPreview={friendsToday.profiles}
               signedIn={!!user}
               homeSpotIds={homeSpotIds}
+              prefsSummary={prefsSummary}
+              onHomeSpotsMutated={() => setRefreshKey((k) => k + 1)}
             />
           </View>
 
@@ -357,6 +371,19 @@ function nlLocalDateKey(d: Date): string {
     month: "2-digit",
     day: "2-digit",
   }).format(d);
+}
+
+function summarizePrefs(prefs: {
+  minWindKn: number;
+  maxGustKn: number | null;
+  minAirTempC: number | null;
+  minWaterTempC: number | null;
+}): string {
+  const parts: string[] = [`min ${prefs.minWindKn} kn`];
+  if (prefs.maxGustKn !== null) parts.push(`gust ≤ ${prefs.maxGustKn}`);
+  if (prefs.minAirTempC !== null) parts.push(`air ≥ ${prefs.minAirTempC}°C`);
+  if (prefs.minWaterTempC !== null) parts.push(`water ≥ ${prefs.minWaterTempC}°C`);
+  return parts.join(" · ");
 }
 
 const styles = StyleSheet.create({

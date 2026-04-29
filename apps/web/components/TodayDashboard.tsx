@@ -7,7 +7,7 @@ import {
   type SpotWeek,
   type SpotWithVerdict,
 } from "@windsiren/core";
-import type { HourlyForecast } from "@windsiren/shared";
+import { msToKnots, type HourlyForecast } from "@windsiren/shared";
 import {
   AirTempTile,
   DaylightTile,
@@ -19,11 +19,13 @@ import {
 import {
   addDaysToKey,
   countRideable,
+  daylightHours,
   mondayOfDate,
   weekDates,
 } from "@/components/dashboard-utils";
+import { HomeSpotsManager, type DashboardScope } from "@/components/HomeSpotsManager";
 import { TileModal, type TileKey } from "@/components/TileModal";
-import { WeekStrip } from "@/components/WeekStrip";
+import { WeekStrip, type WeekScoreEntry } from "@/components/WeekStrip";
 
 type Props = {
   spotWeeks: SpotWeek[];
@@ -35,6 +37,10 @@ type Props = {
   // best-spot anchor all scope to these spots only. Empty set + signedIn
   // shows a "Set home spots →" prompt; signed-out viewers ignore it.
   homeSpotIds: Set<string>;
+  // Short summary like "min 18 kn · gust ≤ 30" — surfaced under the
+  // score so the kiter can see (and tap to edit) what GO actually
+  // means for them. Hidden for signed-out viewers.
+  prefsSummary?: string;
 };
 
 export function TodayDashboard({
@@ -44,11 +50,14 @@ export function TodayDashboard({
   friendsPreview,
   signedIn,
   homeSpotIds,
+  prefsSummary,
 }: Props) {
-  // Personalized scoping: when the user has home spots set, every per-day
-  // aggregate (score, kiteable count, best-spot anchor, week strip)
-  // restricts to that subset. Empty home spots → fall back to all NL.
-  const personalized = signedIn && homeSpotIds.size > 0;
+  // Scope override — lets the kiter flip the dashboard between "home
+  // spots only" and "all NL" without unsetting their home spots. Default
+  // is "personalized" because that's why they bothered to set homes.
+  const [scope, setScope] = useState<DashboardScope>("personalized");
+  const personalized =
+    signedIn && homeSpotIds.size > 0 && scope === "personalized";
   const scopedSpotWeeks = useMemo(
     () =>
       personalized
@@ -83,10 +92,19 @@ export function TodayDashboard({
   const total = dayItems.length;
   const goCount = dayItems.filter((v) => v.verdict?.decision === "go").length;
   const dayScore = total > 0 ? Math.round((goCount / total) * 100) : 0;
-  const dayLabel = labelForScore(dayScore);
   const scoreAccent = dayScore >= 40;
 
   const bestSpot = pickBestSpot(dayItems);
+
+  // Wind / gust averages of the *best* home spot for the selected day —
+  // not averaged across every home spot. The hero answers "where could
+  // I kite right now and what does it look like there?" — using the
+  // single best spot is more honest than a regional mean that nobody
+  // actually kites at.
+  const heroWind = useMemo(
+    () => (bestSpot ? averageWindAndGust([bestSpot]) : null),
+    [bestSpot],
+  );
   const isToday = selectedDate === todayKey;
   const dateLabel = formatDateLabel(selectedDate, isToday);
 
@@ -97,47 +115,72 @@ export function TodayDashboard({
   );
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      {/* Hero: conditions score */}
-      <div className="px-6 pt-5 pb-4">
+    <section className="overflow-hidden rounded-2xl border border-border bg-paper-2 shadow-[0_1px_2px_rgba(11,46,63,0.04),0_8px_24px_-12px_rgba(11,46,63,0.12)]">
+      {/* Hero — paper-grain card with the brand-deep accent on the
+          left rail. Drives the eye to the wind / gust headline first. */}
+      <div className="paper-grain relative px-6 pt-6 pb-5">
+        <div className="absolute left-0 top-0 h-full w-1 bg-brand" aria-hidden />
         <div className="flex items-baseline justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            Conditions score
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">
+            Conditions
           </p>
-          <p className="text-xs text-zinc-500">{dateLabel}</p>
+          <p className="text-[11px] text-ink-mute">{dateLabel}</p>
         </div>
 
         {total === 0 ? (
-          <p className="mt-4 text-sm text-zinc-500">No spot data right now.</p>
+          <p className="mt-4 text-sm text-ink-mute">No spot data right now.</p>
         ) : (
           <div className="mt-3 flex items-end gap-6">
             <div className="leading-none">
-              <span
-                className={[
-                  "font-mono text-6xl font-bold tracking-tight",
-                  scoreAccent
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-zinc-900 dark:text-zinc-100",
-                ].join(" ")}
-              >
-                {dayScore}
-              </span>
-              <span className="ml-1 text-sm text-zinc-500">/ 100</span>
+              {heroWind ? (
+                <>
+                  <div className="flex items-baseline gap-1">
+                    <span
+                      className={[
+                        "headline font-mono text-7xl",
+                        scoreAccent ? "text-go-strong" : "text-ink",
+                      ].join(" ")}
+                    >
+                      {heroWind.windKn}
+                    </span>
+                    <span className="font-mono text-3xl font-light text-ink-faint">/</span>
+                    <span className="headline font-mono text-4xl text-ink-2">
+                      {heroWind.gustKn}
+                    </span>
+                    <span className="ml-1 font-mono text-xs uppercase tracking-wider text-ink-mute">
+                      kn
+                    </span>
+                  </div>
+                  <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-mute">
+                    wind speed · gusts
+                  </p>
+                </>
+              ) : (
+                <span className="font-mono text-3xl text-ink-faint">—</span>
+              )}
             </div>
             <div className="flex-1 pb-1">
-              <div className="text-lg font-semibold">{dayLabel}</div>
-              <div className="mt-0.5 text-sm text-zinc-500">
-                <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">
-                  {goCount}
-                </span>{" "}
-                of {total} {personalized ? "home spots" : "spots"} GO
-              </div>
+              {goCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveTile("goSpots")}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-go px-3.5 py-1.5 text-sm font-bold text-white shadow-sm transition-transform hover:scale-[1.02] hover:bg-go-strong"
+                >
+                  <span className="font-mono">{goCount}</span> spot
+                  {goCount === 1 ? "" : "s"} are GO!{" "}
+                  <span aria-hidden>→</span>
+                </button>
+              ) : (
+                <div className="text-sm text-ink-mute">
+                  0 of {total} {personalized ? "home spots" : "spots"} GO
+                </div>
+              )}
               {bestSpot ? (
                 <Link
                   href={`/spots/${bestSpot.spot.slug}`}
-                  className="mt-1 inline-block text-sm text-emerald-700 hover:underline dark:text-emerald-400"
+                  className="mt-2 inline-block text-sm font-medium text-brand-link hover:underline"
                 >
-                  Best: {bestSpot.spot.name} · {countRideable(bestSpot)}h GO →
+                  {bestSpot.spot.name} · {countRideable(bestSpot)}h GO →
                 </Link>
               ) : null}
             </div>
@@ -146,39 +189,41 @@ export function TodayDashboard({
 
         {total > 0 ? (
           <>
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
+            <div className="mt-5 h-[3px] w-full overflow-hidden rounded-full bg-paper-sunk">
               <div
                 className={[
-                  "h-full",
-                  scoreAccent
-                    ? "bg-emerald-500 dark:bg-emerald-400"
-                    : "bg-zinc-400 dark:bg-zinc-600",
+                  "h-full transition-all",
+                  scoreAccent ? "bg-go" : "bg-no-go",
                 ].join(" ")}
                 style={{ width: `${dayScore}%` }}
               />
             </div>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setActiveTile("score")}
-                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              >
-                View breakdown →
-              </button>
-              {signedIn && homeSpotIds.size === 0 ? (
-                <p className="text-xs text-zinc-500">
-                  This score covers all NL.{" "}
-                  <span className="text-zinc-700 dark:text-zinc-300">
-                    Open a spot to set it as a home spot →
-                  </span>
-                </p>
-              ) : personalized ? (
-                <p className="text-xs text-zinc-500">
-                  Personalized · {homeSpotIds.size} home spot
-                  {homeSpotIds.size === 1 ? "" : "s"}
-                </p>
+            <div className="mt-3 flex items-center justify-end gap-3">
+              {signedIn ? (
+                <HomeSpotsManager
+                  homeSpotIds={homeSpotIds}
+                  allSpots={spotWeeks.map((w) => w.spot)}
+                  scope={scope}
+                  onScopeChange={setScope}
+                />
               ) : null}
             </div>
+            {signedIn ? (
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+                <span className="text-[11px] text-ink-mute">
+                  GO threshold:{" "}
+                  <span className="font-mono text-ink-2">
+                    {prefsSummary ?? "min 15 kn"}
+                  </span>
+                </span>
+                <Link
+                  href="/profile/preferences"
+                  className="text-[11px] font-medium text-brand-link hover:underline"
+                >
+                  Edit kite preferences →
+                </Link>
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -212,8 +257,9 @@ export function TodayDashboard({
         }
       />
 
-      {/* Tile grid */}
-      <div className="grid grid-cols-1 gap-px border-t border-zinc-100 bg-zinc-100 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-900 dark:bg-zinc-900">
+      {/* Tile grid — single-pixel gap on the border color reveals
+          a hairline between cells. */}
+      <div className="grid grid-cols-1 gap-px border-t border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
         <WindTile item={bestSpot} onClick={() => setActiveTile("wind")} />
         <AirTempTile item={bestSpot} onClick={() => setActiveTile("airTemp")} />
         {signedIn ? (
@@ -231,7 +277,11 @@ export function TodayDashboard({
           item={bestSpot}
           onClick={() => setActiveTile("peakWindow")}
         />
-        <DaylightTile item={bestSpot} selectedDate={selectedDate} />
+        <DaylightTile
+          item={bestSpot}
+          selectedDate={selectedDate}
+          onClick={() => setActiveTile("daylight")}
+        />
         <TrendTile item={bestSpot} onClick={() => setActiveTile("trend")} />
       </div>
 
@@ -318,19 +368,26 @@ function collectDateKeys(spotWeeks: SpotWeek[]): string[] {
 function buildWeekScores(
   spotWeeks: SpotWeek[],
   dateKeys: string[],
-): Map<string, { score: number; goCount: number; total: number }> {
-  const out = new Map<string, { score: number; goCount: number; total: number }>();
+): Map<string, WeekScoreEntry> {
+  const out = new Map<string, WeekScoreEntry>();
   for (const dateKey of dateKeys) {
     let goCount = 0;
     let total = 0;
+    let windSum = 0;
+    let windN = 0;
     for (const week of spotWeeks) {
       const day = week.days.find((d) => d.dateKey === dateKey);
       if (!day) continue;
       total += 1;
       if (day.verdict?.decision === "go") goCount += 1;
+      for (const h of daylightHours(day.hours)) {
+        windSum += h.windSpeedMs;
+        windN++;
+      }
     }
     const score = total > 0 ? Math.round((goCount / total) * 100) : 0;
-    out.set(dateKey, { score, goCount, total });
+    const avgWindKn = windN > 0 ? Math.round(msToKnots(windSum / windN)) : null;
+    out.set(dateKey, { score, goCount, total, avgWindKn });
   }
   return out;
 }
@@ -370,11 +427,27 @@ function peakOf(hours: HourlyForecast[]): number {
   return max;
 }
 
-function labelForScore(score: number): string {
-  if (score >= 70) return "Banger day";
-  if (score >= 40) return "Solid day";
-  if (score >= 20) return "Pockets of action";
-  return "Mellow day";
+// Mean wind + mean gust across the daylight hours of every spot in the
+// (already home-scoped) day items list. Knots, rounded. Returns null
+// when the union has no usable hours so the caller can render "—".
+function averageWindAndGust(
+  items: SpotWithVerdict[],
+): { windKn: number; gustKn: number } | null {
+  let windSum = 0;
+  let gustSum = 0;
+  let n = 0;
+  for (const item of items) {
+    for (const h of daylightHours(item.hours)) {
+      windSum += h.windSpeedMs;
+      gustSum += h.gustMs;
+      n++;
+    }
+  }
+  if (n === 0) return null;
+  return {
+    windKn: Math.round(msToKnots(windSum / n)),
+    gustKn: Math.round(msToKnots(gustSum / n)),
+  };
 }
 
 function formatDateLabel(dateKey: string, isToday: boolean): string {

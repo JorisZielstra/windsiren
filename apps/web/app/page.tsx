@@ -14,8 +14,10 @@ import {
   getPhotosForSessions,
   getPhotoPublicUrl,
   getPublicProfiles,
+  getUserPrefs,
   peakWindMs,
   pickHeroSpot,
+  prefsToThresholds,
   type SpotWeek,
   type SpotWithVerdict,
 } from "@windsiren/core";
@@ -52,9 +54,17 @@ export default async function Home() {
   }
 
   const spots = (rows ?? []).map(dbRowToSpot);
+  // Resolve the viewer's personal kite-condition thresholds (or the
+  // shared defaults when signed out / unset). Same profile drives every
+  // verdict on this page so the headline + collapsible + week strip
+  // agree on what counts as GO.
+  const userPrefs = await getUserPrefs(authed, user?.id ?? null);
+  const userThresholds = prefsToThresholds(userPrefs);
   // 16 days = Open-Meteo's free-tier max. Lets the WeekStrip carousel
   // show this week + ~2 weeks of future data.
-  const spotWeeks = await Promise.all(spots.map((s) => fetchSpotWeek(s, 16)));
+  const spotWeeks = await Promise.all(
+    spots.map((s) => fetchSpotWeek(s, 16, userThresholds)),
+  );
 
   const todayKey = nlLocalDateKey(new Date());
 
@@ -148,18 +158,21 @@ export default async function Home() {
           friendsPreview={friendsToday.profiles}
           signedIn={!!user}
           homeSpotIds={homeSpotIds}
+          prefsSummary={summarizePrefs(userPrefs)}
         />
       </section>
 
-      <details className="mb-10 rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-          <span className="mr-2 text-zinc-400 transition-transform group-open:rotate-90">▸</span>
+      <details className="group mb-10 rounded-2xl border border-border bg-paper-2 shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-3.5 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+          <span className="mr-2 inline-block text-ink-faint transition-transform group-open:rotate-90">
+            ▸
+          </span>
           Other spots ({restHomeSpots.length + restFavorites.length + restNonFavorites.length})
         </summary>
-        <div className="border-t border-zinc-100 px-4 pb-4 pt-2 dark:border-zinc-900">
+        <div className="border-t border-border px-5 pb-5 pt-3">
           {restHomeSpots.length > 0 ? (
             <>
-              <h3 className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+              <h3 className="mb-2 mt-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-go-strong">
                 🏠 Your home spots
               </h3>
               <ul className="space-y-2">
@@ -171,7 +184,7 @@ export default async function Home() {
           ) : null}
           {restFavorites.length > 0 ? (
             <>
-              <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <h3 className="mb-2 mt-4 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
                 ★ Favorites
               </h3>
               <ul className="space-y-2">
@@ -183,7 +196,7 @@ export default async function Home() {
           ) : null}
           {restNonFavorites.length > 0 ? (
             <>
-              <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <h3 className="mb-2 mt-4 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
                 All NL spots
               </h3>
               <ul className="space-y-2">
@@ -199,15 +212,18 @@ export default async function Home() {
       {user ? (
         <section>
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <h2 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">
               Your feed
             </h2>
-            <Link href="/feed" className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+            <Link
+              href="/feed"
+              className="text-xs font-medium text-brand-link hover:underline"
+            >
               View all →
             </Link>
           </div>
           {feedItems.length === 0 ? (
-            <div className="rounded-md border border-zinc-200 p-6 text-sm text-zinc-500 dark:border-zinc-800">
+            <div className="rounded-xl border border-border bg-paper-2 p-6 text-sm text-ink-mute">
               Nothing yet. Follow other kiters on a spot page, or log a session to get the feed going.
             </div>
           ) : (
@@ -236,26 +252,29 @@ export default async function Home() {
                 return (
                   <li
                     key={`r:${r.id}`}
-                    className="rounded-md border border-zinc-200 px-4 py-3 dark:border-zinc-800"
+                    className="rounded-xl border border-border bg-paper-2 px-4 py-3"
                   >
                     <div className="flex items-center justify-between gap-2 text-sm">
-                      <span>
+                      <span className="text-ink-2">
                         <Link
                           href={`/users/${item.userId}`}
-                          className="font-medium hover:underline"
+                          className="font-semibold text-ink hover:underline"
                         >
                           {authorName}
                         </Link>{" "}
                         is going to{" "}
                         {spot ? (
-                          <Link href={`/spots/${spot.slug}`} className="font-medium hover:underline">
+                          <Link
+                            href={`/spots/${spot.slug}`}
+                            className="font-semibold text-brand-link hover:underline"
+                          >
                             {spot.name}
                           </Link>
                         ) : (
                           "Unknown spot"
                         )}{" "}
                         on{" "}
-                        <span className="font-medium">
+                        <span className="font-semibold text-ink">
                           {new Date(r.planned_date).toLocaleDateString("en-NL", {
                             weekday: "long",
                             month: "short",
@@ -263,7 +282,9 @@ export default async function Home() {
                           })}
                         </span>
                       </span>
-                      <span className="text-xs text-zinc-500">{relativeTime(item.createdAt)}</span>
+                      <span className="text-xs text-ink-mute">
+                        {relativeTime(item.createdAt)}
+                      </span>
                     </div>
                   </li>
                 );
@@ -279,22 +300,27 @@ export default async function Home() {
 function SpotRow({ item }: { item: SpotWithVerdict }) {
   const peak = peakWindMs(item.hours);
   return (
-    <li className="flex items-center justify-between rounded-md border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900">
+    <li className="flex items-center justify-between rounded-lg border border-border bg-paper px-4 py-3 transition-colors hover:border-border-strong hover:bg-paper-sunk">
       <Link href={`/spots/${item.spot.slug}`} className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{item.spot.name}</span>
+          <span className="font-semibold text-ink">{item.spot.name}</span>
           {item.spot.tideSensitive ? (
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-strong">
               Tide
             </span>
           ) : null}
         </div>
-        <div className="mt-0.5 text-xs text-zinc-500">
-          {item.spot.lat.toFixed(3)}°N, {item.spot.lng.toFixed(3)}°E
+        <div className="mt-0.5 text-xs text-ink-mute">
+          <span className="font-mono">
+            {item.spot.lat.toFixed(3)}°N, {item.spot.lng.toFixed(3)}°E
+          </span>
           {peak !== null ? (
             <>
               {" · "}
-              peak <span className="font-mono">{msToKnots(peak).toFixed(0)} kn</span>
+              peak{" "}
+              <span className="font-mono font-semibold text-ink-2">
+                {msToKnots(peak).toFixed(0)} kn
+              </span>
             </>
           ) : null}
         </div>
@@ -311,4 +337,19 @@ function nlLocalDateKey(d: Date): string {
     month: "2-digit",
     day: "2-digit",
   }).format(d);
+}
+
+// Tiny one-line read of the user's GO threshold for the dashboard. Only
+// renders constraints that are actually set so it doesn't get noisy.
+function summarizePrefs(prefs: {
+  minWindKn: number;
+  maxGustKn: number | null;
+  minAirTempC: number | null;
+  minWaterTempC: number | null;
+}): string {
+  const parts: string[] = [`min ${prefs.minWindKn} kn`];
+  if (prefs.maxGustKn !== null) parts.push(`gust ≤ ${prefs.maxGustKn}`);
+  if (prefs.minAirTempC !== null) parts.push(`air ≥ ${prefs.minAirTempC}°C`);
+  if (prefs.minWaterTempC !== null) parts.push(`water ≥ ${prefs.minWaterTempC}°C`);
+  return parts.join(" · ");
 }

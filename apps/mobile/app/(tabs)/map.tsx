@@ -10,16 +10,68 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { dbRowToSpot, fetchTodayVerdict, type SpotWithVerdict } from "@windsiren/core";
+import {
+  dbRowToSpot,
+  fetchTodayVerdict,
+  getUserPrefs,
+  prefsToThresholds,
+  type SpotWithVerdict,
+} from "@windsiren/core";
 import type { Verdict } from "@windsiren/shared";
+import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
 
+// Pulled from lib/theme — keep the pins in sync with verdict colors used
+// across the rest of the app so the map reads the same as the dashboard.
 const COLORS = {
-  go: "#10b981",
-  marginal: "#f59e0b",
-  no_go: "#71717a",
-  unknown: "#d4d4d8",
+  go: "#0fb89a",
+  marginal: "#d88b3d",
+  no_go: "#7e8a91",
+  unknown: "#a7b2b9",
 } as const;
+
+// Quiet, paper-toned Google Maps style for Android. Hides POIs/transit/
+// road labels so the colored pins do the talking, and tints land/water
+// to match the North Sea palette (paper-sunk land, brand-soft water).
+// iOS uses Apple's built-in mapType="mutedStandard" instead — no JSON
+// needed since MapKit can't accept custom JSON styles.
+const ANDROID_MAP_STYLE = [
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#efe9d9" }, { visibility: "simplified" }],
+  },
+  {
+    featureType: "landscape",
+    elementType: "geometry",
+    stylers: [{ color: "#f3eee0" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#d6e8f2" }],
+  },
+  { featureType: "water", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "administrative",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#c9c3b5" }, { weight: 0.6 }],
+  },
+  {
+    featureType: "administrative.locality",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#324a59" }],
+  },
+  {
+    featureType: "administrative.locality",
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#faf8f2" }, { weight: 2 }],
+  },
+];
 
 function pinColorFor(decision: Verdict["decision"] | undefined): string {
   if (!decision) return COLORS.unknown;
@@ -27,6 +79,8 @@ function pinColorFor(decision: Verdict["decision"] | undefined): string {
 }
 
 export default function MapScreen() {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [items, setItems] = useState<SpotWithVerdict[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,13 +97,20 @@ export default function MapScreen() {
         return;
       }
       const spots = (rows ?? []).map(dbRowToSpot);
-      const results = await Promise.all(spots.map(fetchTodayVerdict));
+      // Use the user's personalized thresholds so the map's verdict
+      // colors line up with the dashboard's GO/MAYBE/NO_GO calls.
+      const userPrefs = await getUserPrefs(supabase, userId);
+      if (cancelled) return;
+      const userThresholds = prefsToThresholds(userPrefs);
+      const results = await Promise.all(
+        spots.map((s) => fetchTodayVerdict(s, userThresholds)),
+      );
       if (!cancelled) setItems(results);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -62,6 +123,8 @@ export default function MapScreen() {
       ) : (
         <MapView
           style={styles.map}
+          mapType={Platform.OS === "ios" ? "mutedStandard" : "standard"}
+          customMapStyle={Platform.OS === "android" ? ANDROID_MAP_STYLE : undefined}
           initialRegion={{
             latitude: 52.7,
             longitude: 4.9,

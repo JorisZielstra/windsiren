@@ -1,9 +1,19 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { windKnColor } from "@windsiren/shared";
 import { formatWeekdayDate } from "./dashboard-utils";
+
+export type WeekScoreEntry = {
+  score: number;
+  goCount: number;
+  total: number;
+  // Average wind kn over the day's daylight hours; null when no data.
+  // Drives bar color via the same Windguru palette as the forecast table.
+  avgWindKn: number | null;
+};
 
 type Props = {
   visibleDates: string[];
-  weekScores: Map<string, { score: number; goCount: number; total: number }>;
+  weekScores: Map<string, WeekScoreEntry>;
   selectedDate: string;
   todayKey: string;
   onSelect: (dateKey: string) => void;
@@ -31,7 +41,13 @@ export function WeekStrip({
           const score = stats?.score ?? 0;
           const isSelected = dateKey === selectedDate;
           const isToday = dateKey === todayKey;
-          const accentBg = scoreAccentColor(score);
+          // Bar color: Windguru palette when wind data is available,
+          // matching the forecast table cells. Falls through to neutral
+          // when no data; selected state still uses its own white.
+          const barTint =
+            !isSelected && hasData && stats!.avgWindKn !== null
+              ? windKnColor(stats!.avgWindKn)
+              : null;
           return (
             <Pressable
               key={dateKey}
@@ -63,8 +79,8 @@ export function WeekStrip({
                   styles.bar,
                   isSelected
                     ? styles.barSelected
-                    : hasData
-                      ? { backgroundColor: accentBg }
+                    : barTint
+                      ? { backgroundColor: barTint.bg }
                       : styles.barNoData,
                 ]}
               />
@@ -95,13 +111,6 @@ function CarouselButton({
       <Text style={styles.arrowText}>{direction === "prev" ? "‹" : "›"}</Text>
     </Pressable>
   );
-}
-
-function scoreAccentColor(score: number): string {
-  if (score >= 70) return "#10b981";
-  if (score >= 40) return "#6ee7b7";
-  if (score >= 20) return "#fcd34d";
-  return "#d4d4d8";
 }
 
 const styles = StyleSheet.create({

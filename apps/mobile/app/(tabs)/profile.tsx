@@ -1,6 +1,6 @@
 import { Link, router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
@@ -83,6 +83,11 @@ export default function ProfileScreen() {
               <Text style={styles.secondaryBtnText}>Edit profile</Text>
             </Pressable>
           </Link>
+          <Link href="/profile-prefs" asChild>
+            <Pressable style={styles.secondaryBtn}>
+              <Text style={styles.secondaryBtnText}>Kite preferences</Text>
+            </Pressable>
+          </Link>
         </View>
 
         <Pressable
@@ -94,6 +99,19 @@ export default function ProfileScreen() {
             {signingOut ? "Signing out…" : "Sign out"}
           </Text>
         </Pressable>
+
+        <View style={styles.attribution}>
+          <Text style={styles.attributionText}>
+            Weather data by{" "}
+            <Text
+              style={styles.attributionLink}
+              onPress={() => Linking.openURL("https://open-meteo.com/")}
+            >
+              Open-Meteo.com
+            </Text>{" "}
+            (KNMI HARMONIE-AROME) · CC BY 4.0
+          </Text>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -149,6 +167,14 @@ const styles = StyleSheet.create({
   },
   signOutBtnDisabled: { opacity: 0.6 },
   signOutText: { fontSize: 15, fontWeight: "600", color: "#18181b" },
+  attribution: { marginTop: 32, paddingHorizontal: 4 },
+  attributionText: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  attributionLink: { color: "#71717a", textDecorationLine: "underline" },
   actionsRow: { flexDirection: "row", gap: 10, marginTop: 24, flexWrap: "wrap" },
   primaryBtn: { backgroundColor: "#18181b", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
   primaryBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },

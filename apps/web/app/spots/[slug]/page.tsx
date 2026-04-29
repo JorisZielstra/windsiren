@@ -1,19 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  cardinalDirection,
-  msToKnots,
-  windKnColor,
-  type HourlyForecast,
-} from "@windsiren/shared";
+import { type HourlyForecast } from "@windsiren/shared";
 import { supabase } from "@/lib/supabase";
 import {
   dbRowToSpot,
   fetchDailyTides,
   fetchLiveObservation,
   fetchSpotWeek,
-  type LiveObservation,
+  getUserPrefs,
+  prefsToThresholds,
 } from "@windsiren/core";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { LiveObservationCard } from "@/components/LiveObservationCard";
 import { SpotConditionsBlock } from "@/components/SpotConditionsBlock";
 import { WindguruDayTable } from "@/components/WindguruDayTable";
 import { FavoriteButton } from "./FavoriteButton";
@@ -46,13 +45,23 @@ export default async function SpotDetailPage({
 
   const spot = dbRowToSpot(row);
 
+  // Resolve user prefs first so verdicts on this page reflect their
+  // personal min-wind / gust / temp thresholds (or the shared defaults
+  // when signed out).
+  const authed = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authed.auth.getUser();
+  const userPrefs = await getUserPrefs(authed, user?.id ?? null);
+  const userThresholds = prefsToThresholds(userPrefs);
+
   // Fetch a full 14-day partition + live observation in parallel. The
   // SpotConditionsBlock pivots through the first ~7 days; the
   // continuous forecast table below scrolls across the full 14.
   // Live-observation failure is non-fatal (returns null).
   const knmiKey = process.env.NEXT_PUBLIC_KNMI_API_KEY;
   const [spotWeek, liveObservation] = await Promise.all([
-    fetchSpotWeek(spot, 16),
+    fetchSpotWeek(spot, 16, userThresholds),
     fetchLiveObservation(spot, knmiKey),
   ]);
 
@@ -73,7 +82,7 @@ export default async function SpotDetailPage({
     <main className="mx-auto max-w-4xl px-6 py-12">
       <Link
         href="/"
-        className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        className="text-sm text-ink-mute hover:text-ink"
       >
         ← All spots
       </Link>
@@ -82,9 +91,9 @@ export default async function SpotDetailPage({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-4xl font-bold tracking-tight">{spot.name}</h1>
+              <h1 className="headline text-5xl text-ink">{spot.name}</h1>
               {spot.tideSensitive ? (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-strong">
                   Tide sensitive
                 </span>
               ) : null}
@@ -95,63 +104,72 @@ export default async function SpotDetailPage({
             <FavoriteButton spotId={spot.id} />
           </div>
         </div>
-        <p className="mt-1 text-sm text-zinc-500">
-          {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · Netherlands
+        <p className="mt-2 font-mono text-xs text-ink-mute">
+          {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · NETHERLANDS
         </p>
 
-        <div className="mt-4 flex items-center gap-4">
+        <div className="mt-5 flex items-center gap-4">
           <WindRose
             safeDirections={spot.safeWindDirections}
             currentWindDirectionDeg={liveObservation?.observation.windDirectionDeg ?? null}
             size={120}
           />
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="text-sm text-ink-2">
             <p>
-              <span className="inline-block h-2 w-2 translate-y-[-1px] rounded-sm bg-emerald-400/80 dark:bg-emerald-800" />{" "}
+              <span className="inline-block h-2 w-2 translate-y-[-1px] rounded-sm bg-go/60" />{" "}
               Safe wind arc
             </p>
             {liveObservation ? (
               <p className="mt-1">
-                <span className="inline-block h-2 w-2 translate-y-[-1px] rounded-full bg-sky-600 dark:bg-sky-400" />{" "}
+                <span className="inline-block h-2 w-2 translate-y-[-1px] rounded-full bg-brand" />{" "}
                 Current wind ({Math.round(liveObservation.observation.windDirectionDeg)}°)
               </p>
             ) : null}
-            <p className="mt-1 font-mono text-xs text-zinc-500">
+            <p className="mt-1 font-mono text-xs text-ink-mute">
               {spot.safeWindDirections.map((r) => `${r.from}°–${r.to}°`).join(", ")}
             </p>
           </div>
         </div>
 
-        {spot.hazards ? (
-          <p className="mt-4 text-sm text-amber-700 dark:text-amber-400">⚠ {spot.hazards}</p>
-        ) : null}
       </header>
 
       {/* Three weather panels stacked into one card with internal dividers.
-          The user explicitly wants snug placement — no gaps — so we strip
-          per-panel rounded corners and borders here and let the outer
-          container own them. */}
-      <section className="mb-10 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        {liveObservation ? <LivePanel live={liveObservation} /> : null}
+          Each panel is independently collapsible — kiters can hide the
+          ones they don't want. Default open. */}
+      <section className="mb-10 overflow-hidden rounded-2xl border border-border bg-paper-2 shadow-[0_1px_2px_rgba(11,46,63,0.04),0_8px_24px_-12px_rgba(11,46,63,0.12)]">
+        {liveObservation ? (
+          <LiveObservationCard live={liveObservation} spot={spot} />
+        ) : null}
         {spotWeek.days.length > 0 ? (
-          <SpotConditionsBlock spotWeek={spotWeek} todayKey={todayKey} flush />
+          <CollapsibleSection
+            title={`Conditions for ${spot.name}`}
+            subtitle="Tap a day to pivot · tap a tile for hourly chart"
+            flush
+          >
+            <SpotConditionsBlock
+              spotWeek={spotWeek}
+              todayKey={todayKey}
+              flush
+              headless
+            />
+          </CollapsibleSection>
         ) : null}
         {forecastError ? (
-          <div className="border-t border-zinc-100 px-4 py-4 dark:border-zinc-900">
+          <div className="border-t border-border px-4 py-4">
             <ErrorCard title="Forecast unavailable" message={forecastError} />
           </div>
         ) : (
-          <div className="border-t border-zinc-100 dark:border-zinc-900">
-            <h2 className="px-4 pt-4 pb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Forecast — next {spotWeek.days.length} days
-            </h2>
+          <CollapsibleSection
+            title={`Forecast — next ${spotWeek.days.length} days`}
+            flush
+          >
             <WindguruDayTable
               spot={spot}
               hours={allHours}
               tideEvents={tideEvents}
               flush
             />
-          </div>
+          </CollapsibleSection>
         )}
       </section>
 
@@ -159,71 +177,6 @@ export default async function SpotDetailPage({
     </main>
   );
 }
-
-function LivePanel({ live }: { live: LiveObservation }) {
-  const { observation: o, ageMinutes } = live;
-  const stale = ageMinutes > 20; // KNMI publishes every 10 min; 20+ min = something's off
-  return (
-    <div className="bg-zinc-50 p-4 dark:bg-zinc-900">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Live — KNMI station {o.stationId}
-        </h2>
-        <span className={`text-xs ${stale ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"}`}>
-          {ageMinutes === 0 ? "just now" : `${ageMinutes} min ago`}
-          {stale ? " · stale" : ""}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-6">
-        <Stat label="Wind" value={`${msToKn(o.windSpeedMs)} kn`} sub={cardinalDirection(o.windDirectionDeg)} kn={msToKnots(o.windSpeedMs)} />
-        <Stat label="Gust" value={`${msToKn(o.gustMs)} kn`} kn={msToKnots(o.gustMs)} />
-        <Stat label="Dir" value={`${Math.round(o.windDirectionDeg)}°`} />
-        {o.airTempC !== null ? <Stat label="Air" value={`${o.airTempC.toFixed(0)}°C`} /> : null}
-        {o.pressureHpa !== null ? (
-          <Stat label="Pressure" value={`${o.pressureHpa.toFixed(0)} hPa`} />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  kn,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  // When provided, the value pill picks up the shared wind-knot color.
-  kn?: number;
-}) {
-  const tint = kn !== undefined ? windKnColor(kn) : null;
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="mt-0.5 flex items-baseline gap-1">
-        {tint ? (
-          <span
-            style={{ backgroundColor: tint.bg, color: tint.fg }}
-            className="rounded-md px-2 py-0.5 font-mono text-xl font-semibold"
-          >
-            {value}
-          </span>
-        ) : (
-          <span className="font-mono text-xl font-semibold">{value}</span>
-        )}
-        {sub ? <span className="text-xs text-zinc-500">{sub}</span> : null}
-      </div>
-    </div>
-  );
-}
-
-function msToKn(ms: number): string {
-  return msToKnots(ms).toFixed(0);
-}
-
 
 function nlLocalDateKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -236,8 +189,8 @@ function nlLocalDateKey(d: Date): string {
 
 function ErrorCard({ title, message }: { title: string; message: string }) {
   return (
-    <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-      <p className="font-medium">{title}</p>
+    <div className="rounded-lg border border-hazard/30 bg-hazard-soft p-4 text-hazard">
+      <p className="font-semibold">{title}</p>
       <p className="mt-1 text-sm">{message}</p>
     </div>
   );

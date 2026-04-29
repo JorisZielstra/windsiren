@@ -10,15 +10,15 @@ type Props = {
 export function VerdictBadge({ verdict }: Props) {
   if (verdict === null) {
     return (
-      <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+      <span className="rounded-full bg-paper-sunk px-3 py-1 text-xs font-medium text-ink-mute">
         No data
       </span>
     );
   }
   const styles: Record<typeof verdict.decision, string> = {
-    go: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-    marginal: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-    no_go: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    go: "verdict-go",
+    marginal: "verdict-maybe",
+    no_go: "verdict-no-go",
   };
   const labels: Record<typeof verdict.decision, string> = {
     go: "GO",
@@ -27,7 +27,7 @@ export function VerdictBadge({ verdict }: Props) {
   };
   return (
     <span
-      className={`rounded-full px-3 py-1 text-xs font-bold tracking-wide ${styles[verdict.decision]}`}
+      className={`rounded-full px-3 py-1 text-[11px] font-bold tracking-[0.15em] ${styles[verdict.decision]}`}
     >
       {labels[verdict.decision]}
     </span>

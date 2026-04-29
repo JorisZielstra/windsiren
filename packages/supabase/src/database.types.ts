@@ -27,6 +27,10 @@ export type Database = {
           avatar_url: string | null;
           bio: string | null;
           onboarded_at: string | null;
+          pref_min_wind_kn: number | null;
+          pref_max_gust_kn: number | null;
+          pref_min_air_temp_c: number | null;
+          pref_min_water_temp_c: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -43,6 +47,10 @@ export type Database = {
           avatar_url?: string | null;
           bio?: string | null;
           onboarded_at?: string | null;
+          pref_min_wind_kn?: number | null;
+          pref_max_gust_kn?: number | null;
+          pref_min_air_temp_c?: number | null;
+          pref_min_water_temp_c?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -59,6 +67,10 @@ export type Database = {
           avatar_url?: string | null;
           bio?: string | null;
           onboarded_at?: string | null;
+          pref_min_wind_kn?: number | null;
+          pref_max_gust_kn?: number | null;
+          pref_min_air_temp_c?: number | null;
+          pref_min_water_temp_c?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -166,6 +178,7 @@ export type Database = {
           user_id: string;
           spot_id: string;
           planned_date: string;
+          planned_window_start_hour: number | null;
           created_at: string;
         };
         Insert: {
@@ -173,6 +186,7 @@ export type Database = {
           user_id: string;
           spot_id: string;
           planned_date: string;
+          planned_window_start_hour?: number | null;
           created_at?: string;
         };
         Update: {
@@ -180,6 +194,7 @@ export type Database = {
           user_id?: string;
           spot_id?: string;
           planned_date?: string;
+          planned_window_start_hour?: number | null;
           created_at?: string;
         };
         Relationships: [];
@@ -448,6 +463,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      session_tracks: {
+        Row: {
+          id: string;
+          session_id: string;
+          user_id: string;
+          top_speed_ms: number;
+          distance_m: number;
+          jump_count: number;
+          max_jump_m: number;
+          polyline: Json;
+          jumps: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          user_id: string;
+          top_speed_ms?: number;
+          distance_m?: number;
+          jump_count?: number;
+          max_jump_m?: number;
+          polyline?: Json;
+          jumps?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          user_id?: string;
+          top_speed_ms?: number;
+          distance_m?: number;
+          jump_count?: number;
+          max_jump_m?: number;
+          polyline?: Json;
+          jumps?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       session_comments: {
         Row: {
           id: string;
@@ -504,4 +558,5 @@ export type FollowRow = Database["public"]["Tables"]["follows"]["Row"];
 export type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
 export type LikeRow = Database["public"]["Tables"]["likes"]["Row"];
 export type SessionPhotoRow = Database["public"]["Tables"]["session_photos"]["Row"];
+export type SessionTrackRow = Database["public"]["Tables"]["session_tracks"]["Row"];
 export type SessionCommentRow = Database["public"]["Tables"]["session_comments"]["Row"];

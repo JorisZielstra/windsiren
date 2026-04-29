@@ -32,13 +32,13 @@ export type HourBucket = {
   rideable: boolean;
 };
 
-// Buckets a day's worth of hourly forecasts into N-hour windows aligned to
-// the start of the day in NL local time. A 2-hour window over a 24-hour
-// day yields 12 buckets (00–02, 02–04, …, 22–24). Defaults to 2 because
-// that's the Windguru-style cadence; pass 1 to keep raw hours.
+// Buckets hourly forecasts into N-hour windows aligned to the start of
+// the day in NL local time. Defaults to 2 hours (Windguru cadence);
+// pass 1 to keep raw hours.
 //
-// Caller is responsible for passing hours from a single NL local day —
-// typically obtained from `groupHoursByLocalDay`.
+// Multi-day safe: hours spanning N days produce up to N × (24/windowSize)
+// buckets, in chronological order. Each bucket is keyed on
+// (NL-date, hour-window) so different days never collide.
 export function bucketHours(
   hours: HourlyForecast[],
   spot: Spot,
@@ -46,26 +46,29 @@ export function bucketHours(
 ): HourBucket[] {
   if (hours.length === 0) return [];
 
-  // Group hours by the bucket index (floor(localHour / windowSize)).
-  const grouped = new Map<number, HourlyForecast[]>();
-  const order: number[] = [];
+  type Key = string; // `${dateKey}|${bucketIdx}`
+  const grouped = new Map<Key, HourlyForecast[]>();
+  const order: Key[] = [];
   for (const h of hours) {
-    const localHour = nlLocalHour(new Date(h.time));
+    const d = new Date(h.time);
+    const dateKey = nlLocalDateKey(d);
+    const localHour = nlLocalHour(d);
     const bucketIdx = Math.floor(localHour / windowSize);
-    let arr = grouped.get(bucketIdx);
+    const key: Key = `${dateKey}|${bucketIdx}`;
+    let arr = grouped.get(key);
     if (!arr) {
       arr = [];
-      grouped.set(bucketIdx, arr);
-      order.push(bucketIdx);
+      grouped.set(key, arr);
+      order.push(key);
     }
     arr.push(h);
   }
 
-  return order.map((idx) => {
-    const bucket = grouped.get(idx)!;
+  return order.map((key) => {
+    const bucket = grouped.get(key)!;
     const first = bucket[0]!;
-    const startLocalHour = idx * windowSize;
-    const dateKey = nlLocalDateKey(new Date(first.time));
+    const [dateKey, idxStr] = key.split("|");
+    const startLocalHour = parseInt(idxStr!, 10) * windowSize;
 
     const winds = bucket.map((h) => h.windSpeedMs);
     const gusts = bucket.map((h) => h.gustMs);
@@ -80,7 +83,7 @@ export function bucketHours(
     return {
       startTime: first.time,
       startLocalHour,
-      dateKey,
+      dateKey: dateKey!,
       hourCount: bucket.length,
       windSpeedMs: mean(winds),
       gustMs: Math.max(...gusts),
