@@ -1,4 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --no-frozen-lockfile"
+  "// Why both flags": "We're using Vercel Root Directory = apps/web. The installCommand runs from there, so we cd ../.. first to land at the workspace root where pnpm-workspace.yaml lives — otherwise pnpm finds the config but enumerates zero workspace packages (ERR_PNPM_WORKSPACE_PKG_NOT_FOUND). --no-frozen-lockfile lets Vercel's pnpm reconcile the lockfile with package.json on the fly, which avoids version-drift failures (lockfile is in v9.0 format, Vercel's CI pnpm is 10.x).",
+  "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
+  "framework": "nextjs"
 }
