@@ -15,6 +15,7 @@ import {
   type Observation,
   type Spot,
   type SpotRegion,
+  type ThresholdProfile,
   type TidePoint,
   type Verdict,
 } from "@windsiren/shared";
