@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getPublicProfile } from "@windsiren/core";
 import { Avatar } from "@/components/Avatar";
+import { UserSearchInput } from "@/components/UserSearchInput";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 // Sticky brand + nav at the top of every page. Sits on the paper-sunk
@@ -30,6 +31,11 @@ export async function GlobalHeader() {
           <NavLink href="/spots" label="Spots" />
           <NavLink href="/map" label="Map" />
           {user ? <NavLink href="/feed" label="Feed" /> : null}
+          {user ? (
+            <div className="ml-1 hidden sm:ml-2 sm:block">
+              <UserSearchInput />
+            </div>
+          ) : null}
           {user ? (
             <Link
               href="/profile"

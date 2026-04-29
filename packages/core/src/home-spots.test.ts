@@ -106,6 +106,28 @@ describe("addHomeSpot", () => {
     expect(firstCall?.[0]).toMatchObject({ position: 5 });
   });
 
+  test("treats PK violation (23505) as idempotent success", async () => {
+    const client = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            order: vi.fn(() => ({
+              limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
+            })),
+          })),
+        })),
+        insert: vi.fn(() =>
+          Promise.resolve({
+            error: { code: "23505", message: "duplicate key value" },
+          }),
+        ),
+      })),
+    } as unknown as TypedSupabaseClient;
+
+    const result = await addHomeSpot(client, "u1", "s1");
+    expect(result).toEqual({ ok: true, isHome: true });
+  });
+
   test("returns error when the insert fails", async () => {
     const client = {
       from: vi.fn(() => ({

@@ -21,3 +21,4 @@ export * from "./monthly-sessions";
 export * from "./past-hours";
 export * from "./preferences";
 export * from "./session-tracking";
+export * from "./user-search";

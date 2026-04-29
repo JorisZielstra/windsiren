@@ -85,8 +85,12 @@ export async function addHomeSpot(
   const { error } = await supabase
     .from("home_spots")
     .insert({ user_id: userId, spot_id: spotId, position: nextPosition });
-  if (error) return { ok: false, reason: "error", message: error.message };
-  return { ok: true, isHome: true };
+  if (!error) return { ok: true, isHome: true };
+  // Already pinned — onboarding re-runs, double-clicks, and stale UI all
+  // surface as 23505 on the (user_id, spot_id) PK. Treat as success so
+  // the welcome flow doesn't bail out mid-loop.
+  if (error.code === "23505") return { ok: true, isHome: true };
+  return { ok: false, reason: "error", message: error.message };
 }
 
 export async function removeHomeSpot(
