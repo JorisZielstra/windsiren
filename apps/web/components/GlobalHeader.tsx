@@ -15,13 +15,13 @@ export async function GlobalHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-paper-sunk/85 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6">
         <Link
           href="/"
           className="headline flex items-baseline gap-1.5 text-base text-ink"
         >
           <span className="text-brand">windsiren</span>
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-ink-mute">
+          <span className="hidden text-[10px] font-mono uppercase tracking-[0.2em] text-ink-mute sm:inline">
             kite
           </span>
         </Link>
@@ -34,7 +34,7 @@ export async function GlobalHeader() {
             <Link
               href="/profile"
               aria-label="Profile"
-              className="ml-2 rounded-full ring-1 ring-border-strong transition-shadow hover:ring-brand"
+              className="ml-1 rounded-full ring-1 ring-border-strong transition-shadow hover:ring-brand sm:ml-2"
             >
               <Avatar
                 url={profile?.avatar_url ?? null}
@@ -45,7 +45,7 @@ export async function GlobalHeader() {
           ) : (
             <Link
               href="/auth/sign-in"
-              className="ml-2 rounded-md bg-brand px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+              className="ml-1 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-strong sm:ml-2 sm:px-3.5 sm:text-sm"
             >
               Sign in
             </Link>
@@ -60,7 +60,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="rounded-md px-3 py-1.5 text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink"
+      className="rounded-md px-2 py-1.5 text-[13px] text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink sm:px-3 sm:text-sm"
     >
       {label}
     </Link>

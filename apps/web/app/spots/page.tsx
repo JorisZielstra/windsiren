@@ -74,7 +74,7 @@ export default async function SpotsPage({
 
   if (error) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12">
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <h1 className="text-3xl font-bold tracking-tight">Spots</h1>
         <div className="mt-6 rounded-md border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           <p className="font-medium">Failed to load spots</p>
@@ -145,7 +145,7 @@ export default async function SpotsPage({
     selectedDirs.size > 0 || tideFilter !== "any" || regionFilter !== null;
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <h1 className="headline text-5xl text-ink">Spots</h1>
       <p className="mt-2 font-mono text-xs uppercase tracking-[0.18em] text-ink-mute">
         {filtered.length} of {items.length} NL spots

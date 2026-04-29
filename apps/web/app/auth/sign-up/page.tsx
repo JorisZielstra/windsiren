@@ -46,7 +46,7 @@ export default function SignUpPage() {
 
   if (needsConfirmation) {
     return (
-      <main className="mx-auto max-w-sm px-6 py-16">
+      <main className="mx-auto max-w-sm px-4 py-10 sm:px-6 sm:py-16">
         <h1 className="headline text-3xl text-ink">Check your email</h1>
         <p className="mt-3 text-ink-2">
           We sent a confirmation link to{" "}
@@ -64,7 +64,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <main className="mx-auto max-w-sm px-6 py-16">
+    <main className="mx-auto max-w-sm px-4 py-10 sm:px-6 sm:py-16">
       <Link href="/" className="text-sm text-ink-mute hover:text-ink">
         ← Home
       </Link>

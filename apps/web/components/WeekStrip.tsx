@@ -26,6 +26,12 @@ type Props = {
   // Carousel — undefined means the button is hidden / disabled.
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
+  // What number to render under the weekday label.
+  //   "score" — 0–100 % GO out of total (per-spot rideable-hours view)
+  //   "count" — raw count of GO spots (dashboard view, where a few GO
+  //             out of 64 rounds to 0% and looks broken)
+  // The total stays accessible via the chip's tooltip / hero copy.
+  display?: "score" | "count";
 };
 
 // Mon → Sun chip strip with optional prev/next carousel arrows. The
@@ -39,6 +45,7 @@ export function WeekStrip({
   onSelect,
   onPrevWeek,
   onNextWeek,
+  display = "score",
 }: Props) {
   if (visibleDates.length === 0) return null;
   return (
@@ -53,7 +60,10 @@ export function WeekStrip({
           {visibleDates.map((dateKey) => {
             const stats = weekScores.get(dateKey);
             const hasData = stats !== undefined;
-            const score = stats?.score ?? 0;
+            const value =
+              display === "count"
+                ? (stats?.goCount ?? 0)
+                : (stats?.score ?? 0);
             const isSelected = dateKey === selectedDate;
             const isToday = dateKey === todayKey;
             // Bar color: Windguru wind palette when we have wind data,
@@ -89,8 +99,18 @@ export function WeekStrip({
                   {isToday ? "Today" : formatWeekdayDate(dateKey)}
                 </span>
                 <span className="headline mt-1 font-mono text-lg tabular-nums">
-                  {hasData ? score : "—"}
+                  {hasData ? value : "—"}
                 </span>
+                {display === "count" && hasData && stats!.total > 1 ? (
+                  <span
+                    className={[
+                      "mt-0.5 font-mono text-[9px] leading-none tracking-wider",
+                      isSelected ? "text-white/60" : "text-ink-faint",
+                    ].join(" ")}
+                  >
+                    of {stats!.total} GO
+                  </span>
+                ) : null}
                 <span
                   className={[
                     "mt-1 h-1 w-6 rounded-full",

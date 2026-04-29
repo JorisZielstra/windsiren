@@ -31,7 +31,7 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="mx-auto max-w-sm px-6 py-16">
+    <main className="mx-auto max-w-sm px-4 py-10 sm:px-6 sm:py-16">
       <Link href="/" className="text-sm text-ink-mute hover:text-ink">
         ← Home
       </Link>

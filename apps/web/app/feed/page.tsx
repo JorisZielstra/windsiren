@@ -52,7 +52,7 @@ export default async function FeedPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-16">
       <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
         ← Home
       </Link>

@@ -18,7 +18,7 @@ export default async function PreferencesPage() {
   const prefs = await getUserPrefs(supabase, user.id);
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
+    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
       <Link
         href="/profile"
         className="text-sm text-ink-mute hover:text-ink"

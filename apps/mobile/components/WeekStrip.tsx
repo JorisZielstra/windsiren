@@ -19,6 +19,11 @@ type Props = {
   onSelect: (dateKey: string) => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
+  // What number to render under the weekday label.
+  //   "score" — 0–100 % GO out of total (per-spot rideable-hours view)
+  //   "count" — raw count of GO spots (dashboard view, where a few GO
+  //             out of 64 rounds to 0% and looks broken)
+  display?: "score" | "count";
 };
 
 export function WeekStrip({
@@ -29,6 +34,7 @@ export function WeekStrip({
   onSelect,
   onPrevWeek,
   onNextWeek,
+  display = "score",
 }: Props) {
   if (visibleDates.length === 0) return null;
   return (
@@ -38,7 +44,10 @@ export function WeekStrip({
         {visibleDates.map((dateKey) => {
           const stats = weekScores.get(dateKey);
           const hasData = stats !== undefined;
-          const score = stats?.score ?? 0;
+          const value =
+            display === "count"
+              ? (stats?.goCount ?? 0)
+              : (stats?.score ?? 0);
           const isSelected = dateKey === selectedDate;
           const isToday = dateKey === todayKey;
           // Bar color: Windguru palette when wind data is available,
@@ -72,8 +81,18 @@ export function WeekStrip({
                 {isToday ? "TODAY" : formatWeekdayDate(dateKey)}
               </Text>
               <Text style={[styles.score, isSelected && styles.scoreSelected]}>
-                {hasData ? score : "—"}
+                {hasData ? value : "—"}
               </Text>
+              {display === "count" && hasData && stats!.total > 1 ? (
+                <Text
+                  style={[
+                    styles.countTotal,
+                    isSelected && styles.countTotalSelected,
+                  ]}
+                >
+                  of {stats!.total} GO
+                </Text>
+              ) : null}
               <View
                 style={[
                   styles.bar,
@@ -156,6 +175,15 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   scoreSelected: { color: "#fff" },
+  countTotal: {
+    marginTop: 1,
+    fontSize: 8,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    color: "#a1a1aa",
+    fontVariant: ["tabular-nums"],
+  },
+  countTotalSelected: { color: "rgba(255,255,255,0.6)" },
   bar: { marginTop: 4, height: 3, width: 24, borderRadius: 999 },
   barSelected: { backgroundColor: "rgba(255,255,255,0.4)" },
   barNoData: { backgroundColor: "#e4e4e7" },

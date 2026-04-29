@@ -95,10 +95,10 @@ export function HomeSpotsManager({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+        className="text-xs text-ink-mute transition-colors hover:text-ink"
       >
         {triggerLabel}{" "}
-        <span aria-hidden className="text-zinc-400">
+        <span aria-hidden className="text-ink-faint">
           {open ? "▴" : "▾"}
         </span>
       </button>
@@ -106,11 +106,11 @@ export function HomeSpotsManager({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
+          className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-border bg-paper-2 p-3 shadow-lg"
         >
           {/* Scope toggle — explicit pair so the active state reads at a glance. */}
           <div className="mb-3">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
               Show on dashboard
             </p>
             <div className="flex gap-1.5">
@@ -127,7 +127,7 @@ export function HomeSpotsManager({
               />
             </div>
             {homeSpotIds.size === 0 ? (
-              <p className="mt-1.5 text-[10px] text-zinc-500">
+              <p className="mt-1.5 text-[10px] text-ink-mute">
                 Add a home spot below to enable the personalized view.
               </p>
             ) : null}
@@ -136,16 +136,16 @@ export function HomeSpotsManager({
           {/* Current home spots */}
           {homeSpots.length > 0 ? (
             <div className="mb-3">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
                 Your home spots
               </p>
               <ul className="space-y-1">
                 {homeSpots.map((spot) => (
                   <li
                     key={spot.id}
-                    className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-2 py-1.5 dark:bg-emerald-950/40"
+                    className="flex items-center justify-between gap-2 rounded-md bg-go-soft px-2 py-1.5"
                   >
-                    <span className="truncate text-sm font-medium">
+                    <span className="truncate text-sm font-medium text-go-ink">
                       🏠 {spot.name}
                     </span>
                     <button
@@ -153,7 +153,7 @@ export function HomeSpotsManager({
                       onClick={() => toggleHome(spot.id, true)}
                       disabled={busyId === spot.id}
                       aria-label={`Remove ${spot.name} from home spots`}
-                      className="text-xs text-zinc-500 hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
+                      className="text-xs text-ink-mute hover:text-hazard disabled:opacity-50"
                     >
                       {busyId === spot.id ? "…" : "×"}
                     </button>
@@ -165,7 +165,7 @@ export function HomeSpotsManager({
 
           {/* Add picker */}
           <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-mute">
               Add home spot
             </p>
             <select
@@ -175,7 +175,7 @@ export function HomeSpotsManager({
                 if (id) toggleHome(id, false);
               }}
               disabled={busyId !== null}
-              className="block w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="block w-full rounded-md border border-border bg-paper-2 px-2 py-1.5 text-sm text-ink"
             >
               <option value="">
                 {homeSpotIds.size >= SUGGESTED_HOME_SPOT_MAX
@@ -191,9 +191,7 @@ export function HomeSpotsManager({
           </div>
 
           {error ? (
-            <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-              {error}
-            </p>
+            <p className="mt-2 text-xs text-hazard">{error}</p>
           ) : null}
         </div>
       ) : null}
@@ -219,8 +217,8 @@ function ScopePill({
       disabled={disabled}
       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
         active
-          ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-          : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+          ? "border-go bg-go-soft text-go-ink"
+          : "border-border bg-paper-2 text-ink-2 hover:border-border-strong"
       } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
     >
       {label}

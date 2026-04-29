@@ -79,7 +79,7 @@ export default async function SpotDetailPage({
   const tideEvents = tidesPerDay.flat();
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-12">
+    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
       <Link
         href="/"
         className="text-sm text-ink-mute hover:text-ink"
@@ -87,26 +87,28 @@ export default async function SpotDetailPage({
         ← All spots
       </Link>
 
-      <header className="mt-4 mb-10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="headline text-5xl text-ink">{spot.name}</h1>
+      <header className="mt-4 mb-8 sm:mb-10">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="headline text-3xl text-ink sm:text-5xl">
+                {spot.name}
+              </h1>
               {spot.tideSensitive ? (
                 <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-strong">
                   Tide sensitive
                 </span>
               ) : null}
             </div>
+            <p className="mt-2 font-mono text-xs text-ink-mute">
+              {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · NETHERLANDS
+            </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
             <HomeSpotButton spotId={spot.id} />
             <FavoriteButton spotId={spot.id} />
           </div>
         </div>
-        <p className="mt-2 font-mono text-xs text-ink-mute">
-          {spot.lat.toFixed(5)}°N, {spot.lng.toFixed(5)}°E · NETHERLANDS
-        </p>
 
         <div className="mt-5 flex items-center gap-4">
           <WindRose

@@ -52,18 +52,18 @@ export function LiveHistoryModal({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-xl border-t border-border bg-paper-2 shadow-xl sm:max-h-[85vh] sm:max-w-2xl sm:rounded-xl sm:border"
       >
-        <div className="flex items-start justify-between gap-2 border-b border-zinc-100 px-6 py-4 dark:border-zinc-900">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-border bg-paper-2 px-4 py-3 sm:px-6 sm:py-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-mute">
               Past {hoursBack}h
             </p>
-            <h2 className="mt-0.5 text-lg font-semibold">
+            <h2 className="mt-0.5 text-lg font-semibold text-ink">
               Actual wind · {spot.name}
             </h2>
           </div>
@@ -71,12 +71,12 @@ export function LiveHistoryModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-2xl leading-none text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="text-2xl leading-none text-ink-mute hover:text-ink"
           >
             ×
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {error ? (
             <p className="text-sm text-amber-600 dark:text-amber-400">
               Couldn't load history: {error}

@@ -117,8 +117,10 @@ export function TodayDashboard({
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-paper-2 shadow-[0_1px_2px_rgba(11,46,63,0.04),0_8px_24px_-12px_rgba(11,46,63,0.12)]">
       {/* Hero — paper-grain card with the brand-deep accent on the
-          left rail. Drives the eye to the wind / gust headline first. */}
-      <div className="paper-grain relative px-6 pt-6 pb-5">
+          left rail. Drives the eye to the wind / gust headline first.
+          On narrow viewports the wind/gust + GO action stack vertically
+          so the numbers stay legible without horizontal squishing. */}
+      <div className="paper-grain relative px-4 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-5">
         <div className="absolute left-0 top-0 h-full w-1 bg-brand" aria-hidden />
         <div className="flex items-baseline justify-between">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">
@@ -130,21 +132,23 @@ export function TodayDashboard({
         {total === 0 ? (
           <p className="mt-4 text-sm text-ink-mute">No spot data right now.</p>
         ) : (
-          <div className="mt-3 flex items-end gap-6">
+          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
             <div className="leading-none">
               {heroWind ? (
                 <>
                   <div className="flex items-baseline gap-1">
                     <span
                       className={[
-                        "headline font-mono text-7xl",
+                        "headline font-mono text-6xl sm:text-7xl",
                         scoreAccent ? "text-go-strong" : "text-ink",
                       ].join(" ")}
                     >
                       {heroWind.windKn}
                     </span>
-                    <span className="font-mono text-3xl font-light text-ink-faint">/</span>
-                    <span className="headline font-mono text-4xl text-ink-2">
+                    <span className="font-mono text-2xl font-light text-ink-faint sm:text-3xl">
+                      /
+                    </span>
+                    <span className="headline font-mono text-3xl text-ink-2 sm:text-4xl">
                       {heroWind.gustKn}
                     </span>
                     <span className="ml-1 font-mono text-xs uppercase tracking-wider text-ink-mute">
@@ -230,12 +234,16 @@ export function TodayDashboard({
 
       {/* Week strip — Mon-Sun of the selectedDate's week, with carousel
           arrows that shift selectedDate by ±7 days clamped to the
-          available data window (today + ~15 days). */}
+          available data window (today + ~15 days). Displays the raw
+          GO-spot count (scoped to home spots when personalized; otherwise
+          all of NL) — % rounded to 0 when only a few of 64 spots are
+          kiteable, which made the strip read as broken. */}
       <WeekStrip
         visibleDates={weekDates(mondayOfDate(selectedDate))}
         weekScores={weekScores}
         selectedDate={selectedDate}
         todayKey={todayKey}
+        display="count"
         onSelect={setSelectedDate}
         onPrevWeek={
           dateKeys.length > 0 && mondayOfDate(selectedDate) > dateKeys[0]!

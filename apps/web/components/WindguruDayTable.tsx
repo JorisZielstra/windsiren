@@ -37,17 +37,27 @@ export function WindguruDayTable({
 }: Props) {
   const buckets = bucketHours(hours, spot, windowSize);
   if (buckets.length === 0) {
-    return <p className="text-xs text-zinc-500">No hourly data to show.</p>;
+    return <p className="text-xs text-ink-mute">No hourly data to show.</p>;
   }
 
   return (
-    <div
-      className={
-        flush
-          ? "overflow-x-auto"
-          : "overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800"
-      }
-    >
+    <div className="relative">
+      {/* Scroll-affordance hint on the right edge — fades the last
+          ~20px on narrow viewports to suggest "swipe right for more
+          hours". Hidden once the user's scrolled or on wider screens
+          via opacity-style media queries would be ideal but a static
+          gradient is the cheap, reliable signal. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute right-0 top-0 z-10 h-full w-6 bg-gradient-to-l from-paper-2 to-transparent sm:hidden"
+      />
+      <div
+        className={
+          flush
+            ? "overflow-x-auto"
+            : "overflow-x-auto rounded-md border border-border"
+        }
+      >
       <table className="border-separate border-spacing-0 text-sm">
         <thead>
           {/* Header — one stacked cell per bucket: day · time-window.
@@ -151,6 +161,7 @@ export function WindguruDayTable({
           ) : null}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

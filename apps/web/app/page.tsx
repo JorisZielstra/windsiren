@@ -43,7 +43,7 @@ export default async function Home() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-16">
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-16">
         <h1 className="text-4xl font-bold">WindSiren</h1>
         <div className="mt-6 rounded-md border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           <p className="font-medium">Failed to load spots</p>
@@ -149,7 +149,7 @@ export default async function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <section className="mb-8">
         <TodayDashboard
           spotWeeks={spotWeeks}

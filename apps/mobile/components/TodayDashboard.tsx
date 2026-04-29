@@ -206,6 +206,7 @@ export function TodayDashboard({
         weekScores={weekScores}
         selectedDate={selectedDate}
         todayKey={todayKey}
+        display="count"
         onSelect={setSelectedDate}
         onPrevWeek={
           dateKeys.length > 0 && mondayOfDate(selectedDate) > dateKeys[0]!
